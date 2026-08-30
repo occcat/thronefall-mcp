@@ -143,7 +143,20 @@ def tool_state(arguments: dict[str, Any]) -> dict[str, Any]:
 
 def tool_next_wave(arguments: dict[str, Any]) -> dict[str, Any]:
     _ = arguments
-    return http_json("GET", "/state/next-wave")
+    body = http_json("GET", "/state/next-wave")
+    if not isinstance(body, dict):
+        return body
+    preview = body.get("nextWave")
+    mouths = None
+    available = None
+    if isinstance(preview, dict):
+        mouths = preview.get("mouths")
+        available = preview.get("available")
+    result = dict(body)
+    result["mouths"] = mouths if mouths is not None else []
+    if available is not None:
+        result["available"] = available
+    return result
 
 
 def tool_harvest(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -237,7 +250,12 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "thronefall_next_wave",
-        "description": "GET /state/next-wave. Tonight's wave preview (not the map-wide spawn catalog).",
+        "description": (
+            "GET /state/next-wave. Tonight's mouths and each mouth's enemy types+counts "
+            "(mouths[].enemies[] / nextWave.mouths). Do not use /state/spawns — that is "
+            "every map line, not tonight. Top-level mouths and available are copies; "
+            "nextWave still has waveNumber."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {},
