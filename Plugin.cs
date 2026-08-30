@@ -13,6 +13,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Instance = this;
         PluginConfig.Bind(Config);
+        ReflectionCache.TryInit(Logger);
         MainThread.Current ??= new MainThread();
     }
 
