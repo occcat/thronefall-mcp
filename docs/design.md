@@ -439,7 +439,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | GET | `/state/enemies` | `day/night` | 敌军摘要 |
 | GET | `/state/spawns` | `day/night` | 地图全部 `EnemySpawnLine` + `suggestedRally`。**不是**今晚波次 |
 | GET | `/state/next-wave` | `day/night` | 今晚波次预览。`available=false` 表示读不到，不要编造出线 |
-| GET | `/state/loadout` | `menu/level_select/day/night` | 装备与 perk 点 |
+| GET | `/state/loadout` | `menu/level_select/day/night` | 已装备名、perk/weapon/mutator 目录、任务、loadout worth |
 | GET | `/openapi.json` | 任何（HTTP 线程） | 静态 OpenAPI 3 文档 |
 | POST | `/harvest` | `day` | 收全部或一个 slot |
 | POST | `/slots/{id}/build` | `day` | `TryToBuildOrUpgradeAndPay` |
@@ -537,7 +537,16 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
   },
   "loadout": {
     "asString": ["Royal Mint", "Arcane Towers", "Light Spear"],
-    "perkPointsRemaining": 0
+    "perkPointsRemaining": 0,
+    "catalog": [
+      { "name": "Royal Mint", "kind": "perk", "locked": false, "unlocked": true, "description": "Start with extra gold" },
+      { "name": "God King", "kind": "perk", "locked": true, "unlocked": false, "description": "Locked" },
+      { "name": "Light Spear", "kind": "weapon", "locked": false, "unlocked": true, "description": "" }
+    ],
+    "quests": [
+      { "statement": "Beat the level", "complete": true }
+    ],
+    "worth": 12
   },
   "slots": [ { "...": "见下" } ],
   "units": [ { "...": "见下" } ],
@@ -568,7 +577,10 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | `currentScore` / `maxScorePerNight` | `ScoreManager.Instance.CurrentScore` / `MaxScorePerNight`（读不到则为 0；**不**调用 `CalculateEndOfNightScore` / `AddDebugPoints`） |
 | `training[]` | `UnitRespawnerForBuildings`：`AtLeastOneUnitIsKnockedOut`、`timeTillNextRespawn`，经 `myBuildSlot` 对上 slot instanceId |
 | `level.*` | `LevelProgressManager.instance.GetLevelDataForActiveScene()` + `LevelInfo.sceneName` |
-| `loadout.asString` | `MatchSave.currentLoadoutAsString`（经 `MatchSaveLoadHandler.CurrentSave`） |
+| `loadout.asString` | `MatchSave.currentLoadoutAsString`（经 `MatchSaveLoadHandler.CurrentSave`）；空则 `PerkManager.CurrentlyEquipped.displayName` |
+| `loadout.catalog` | 选图/菜单：`LoadoutUIHelper.perks/weapons/mutators`（`TFUIEquippable.Data.displayName`、`isPerk/isWeapon/isMutator`、`Locked` / `Equippable.IsUnlocked`、`description`）。局内：`PerkManager.allEquippables`，空则 `CurrentlyEquipped`；kind 由 `EquippablePerk/Weapon/Mutation` 运行时类型推断。读失败保持 `[]` |
+| `loadout.quests` | `LevelProgressManager.GetLevelInfoFromCurrentSceneName().Quests`（回退 `_quests` / `quests`）：`Quest.GetMissionStatement()`，`CheckBeaten(LevelData)` 读得到则填 `complete`，否则 `false` |
+| `loadout.worth` | `LoadoutUIHelper.LoadoutWorth`；读不到则 `null` 且 JSON 省略 |
 | `resetUnitFormationEveryMorning` | `SettingsManager.Instance.ResetUnitFormationEveryMorning` |
 
 #### Slot DTO
