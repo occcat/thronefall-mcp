@@ -28,6 +28,8 @@ public sealed class Plugin : BaseUnityPlugin
             _mainThread = MainThread.Current ?? new MainThread();
             MainThread.Current = _mainThread;
             HealthModule.FrameCountReader = ReadFrameCount;
+            IdempotencyCache.Current ??= new IdempotencyCache();
+            Slots.Backend ??= new LiveSlotBackend();
 
             _server = new Server(
                 logInfo: msg => Logger.LogInfo(msg),

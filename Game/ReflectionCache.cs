@@ -13,6 +13,7 @@ public static class ReflectionCache
     public static bool CommandUnitsReady { get; private set; }
     public static bool GroupsReady { get; private set; }
     public static bool SpawnsReady { get; private set; }
+    public static bool SlotsReady { get; private set; }
 
     public static Type? CommandUnitsType { get; private set; }
     public static FieldInfo? CommandUnitsInstance { get; private set; }
@@ -76,6 +77,70 @@ public static class ReflectionCache
     public static int ETagGroup2 { get; private set; } = 46;
     public static int ETagGroup3 { get; private set; } = 47;
 
+    public static Type? TagManager => TagManagerType;
+    public static Type? DayNightCycle => DayNightCycleType;
+    public static Type? SceneTransitionManager => SceneTransitionManagerType;
+    public static Type? UnityObject => UnityObjectType;
+    public static FieldInfo? SceneTransitionInstance => SceneTransitionManagerInstance;
+    public static PropertyInfo? DayNightInstance => DayNightCycleInstance;
+
+    public static Type? BuildSlot { get; private set; }
+    public static Type? BuildingInteractor { get; private set; }
+    public static Type? PlayerInteraction { get; private set; }
+    public static Type? PlayerMovement { get; private set; }
+    public static Type? ChoiceManager { get; private set; }
+    public static Type? Choice { get; private set; }
+    public static Type? SceneManager { get; private set; }
+
+    public static MethodInfo? TryToBuildOrUpgradeAndPay { get; private set; }
+    public static MethodInfo? ExecuteBuildOrUpgrade { get; private set; }
+    public static MethodInfo? OnUpgradeChoiceComplete { get; private set; }
+    public static MethodInfo? Harvest { get; private set; }
+    public static MethodInfo? MarkAsHarvested { get; private set; }
+    public static MethodInfo? SpendCoins { get; private set; }
+    public static MethodInfo? SpendEnergyCores { get; private set; }
+    public static MethodInfo? TeleportTo { get; private set; }
+    public static MethodInfo? GetInstanceId { get; private set; }
+    public static MethodInfo? GetActiveScene { get; private set; }
+
+    public static PropertyInfo? BuildSlotLevel { get; private set; }
+    public static PropertyInfo? CanBeUpgraded { get; private set; }
+    public static PropertyInfo? NextUpgradeIsChoice { get; private set; }
+    public static PropertyInfo? NextUpgradeOrBuildCost { get; private set; }
+    public static PropertyInfo? NextUpgradeOrBuildEnergyCoreCost { get; private set; }
+    public static PropertyInfo? GoldIncome { get; private set; }
+    public static PropertyInfo? EnergyCoreIncome { get; private set; }
+    public static PropertyInfo? BuildSlotUpgrades { get; private set; }
+    public static PropertyInfo? BuildSlotInteractor { get; private set; }
+    public static PropertyInfo? CanBeHarvested { get; private set; }
+    public static PropertyInfo? IsWaitingForChoice { get; private set; }
+    public static PropertyInfo? KnockedOutTonight { get; private set; }
+    public static PropertyInfo? Balance { get; private set; }
+    public static PropertyInfo? EnergyCoreBalance { get; private set; }
+    public static PropertyInfo? TrueBalance { get; private set; }
+    public static PropertyInfo? Transform { get; private set; }
+    public static PropertyInfo? Position { get; private set; }
+    public static PropertyInfo? GameObject { get; private set; }
+    public static PropertyInfo? ChoiceCanBePicked { get; private set; }
+    public static PropertyInfo? ChoiceCoroutineRunning { get; private set; }
+
+    public static FieldInfo? BuildingName { get; private set; }
+    public static FieldInfo? TargetBuilding { get; private set; }
+    public static FieldInfo? BuildingInteractorOnSlot { get; private set; }
+    public static FieldInfo? HarvestedToday { get; private set; }
+    public static FieldInfo? WaitingForChoiceField { get; private set; }
+    public static FieldInfo? PlayerBuildingInteractors { get; private set; }
+    public static FieldInfo? PlayerInteractionInstance { get; private set; }
+    public static FieldInfo? PlayerMovementInstance { get; private set; }
+    public static FieldInfo? ChoiceManagerInstance { get; private set; }
+    public static FieldInfo? AvailableChoices { get; private set; }
+    public static FieldInfo? ChoiceToReturn { get; private set; }
+    public static FieldInfo? CurrentOriginBuildSlot { get; private set; }
+    public static FieldInfo? ChoiceName { get; private set; }
+    public static FieldInfo? ChoiceTooltip { get; private set; }
+    public static FieldInfo? UpgradeBranches { get; private set; }
+    public static FieldInfo? ChoiceDetails { get; private set; }
+
     public static void TryInit(object? logger = null)
     {
         try
@@ -101,6 +166,16 @@ public static class ReflectionCache
         catch (Exception ex)
         {
             Warn(logger, "ReflectionCache.TryInit failed: " + ex.Message);
+        }
+
+        try
+        {
+            BindSlots(logger);
+        }
+        catch (Exception ex)
+        {
+            SlotsReady = false;
+            Warn(logger, "slot reflection init failed: " + ex.Message);
         }
 
         Initialized = true;
@@ -184,6 +259,77 @@ public static class ReflectionCache
             Warn(logger, "CommandUnits solver members missing; UseCommandUnitsSolver will fall back");
         if (TryToSelectUnits == null && CommandUnitsType != null)
             Warn(logger, "CommandUnits.TryToSelectUnits not found (unused; buffer is filled directly)");
+    }
+
+    static void BindSlots(object? logger)
+    {
+        BuildSlot = FindType("BuildSlot");
+        BuildingInteractor = FindType("BuildingInteractor");
+        PlayerInteraction = FindType("PlayerInteraction");
+        PlayerMovement = FindType("PlayerMovement");
+        ChoiceManager = FindType("ChoiceManager");
+        Choice = FindType("Choice");
+        SceneManager = FindType("UnityEngine.SceneManagement.SceneManager");
+
+        TryToBuildOrUpgradeAndPay = M(BuildSlot, "TryToBuildOrUpgradeAndPay", -1);
+        ExecuteBuildOrUpgrade = M(BuildSlot, "ExecuteBuildOrUpgrade", -1);
+        OnUpgradeChoiceComplete = M(BuildSlot, "OnUpgradeChoiceComplete", -1);
+        Harvest = M(BuildingInteractor, "Harvest", -1);
+        MarkAsHarvested = M(BuildingInteractor, "MarkAsHarvested", -1);
+        SpendCoins = M(PlayerInteraction, "SpendCoins", -1);
+        SpendEnergyCores = M(PlayerInteraction, "SpendEnergyCores", -1);
+        TeleportTo = M(PlayerMovement, "TeleportTo", -1);
+        GetInstanceId = M(UnityObjectType, "GetInstanceID", 0) ?? M(GameObjectType, "GetInstanceID", 0);
+        GetActiveScene = M(SceneManager, "GetActiveScene", 0);
+
+        BuildSlotLevel = P(BuildSlot, "Level");
+        CanBeUpgraded = P(BuildSlot, "CanBeUpgraded");
+        NextUpgradeIsChoice = P(BuildSlot, "NextUpgradeIsChoice");
+        NextUpgradeOrBuildCost = P(BuildSlot, "NextUpgradeOrBuildCost");
+        NextUpgradeOrBuildEnergyCoreCost = P(BuildSlot, "NextUpgradeOrBuildEnergyCoreCost");
+        GoldIncome = P(BuildSlot, "GoldIncome");
+        EnergyCoreIncome = P(BuildSlot, "EnergyCoreIncome");
+        BuildSlotUpgrades = P(BuildSlot, "Upgrades");
+        BuildSlotInteractor = P(BuildSlot, "Interactor");
+        CanBeHarvested = P(BuildingInteractor, "canBeHarvested") ?? P(BuildingInteractor, "CanBeHarvested");
+        IsWaitingForChoice = P(BuildingInteractor, "IsWaitingForChoice");
+        KnockedOutTonight = P(BuildingInteractor, "KnockedOutTonight");
+        Balance = P(PlayerInteraction, "Balance");
+        EnergyCoreBalance = P(PlayerInteraction, "EnergyCoreBalance");
+        TrueBalance = P(PlayerInteraction, "TrueBalance");
+        Transform = P(BuildSlot, "transform") ?? P(ComponentType, "transform");
+        Position = P(TransformType, "position");
+        GameObject = P(ComponentType, "gameObject");
+        ChoiceCanBePicked = P(Choice, "CanBePicked");
+        ChoiceCoroutineRunning = P(ChoiceManager, "ChoiceCoroutineRunning");
+
+        BuildingName = F(BuildSlot, "buildingName");
+        TargetBuilding = F(BuildingInteractor, "targetBuilding");
+        BuildingInteractorOnSlot = F(BuildSlot, "buildingInteractor") ?? F(BuildSlot, "interactor");
+        HarvestedToday = F(BuildingInteractor, "harvestedToday");
+        WaitingForChoiceField = F(BuildingInteractor, "isWaitingForChoice");
+        PlayerBuildingInteractors = F(TagManagerType, "playerBuildingInteractors");
+        PlayerInteractionInstance = F(PlayerInteraction, "instance");
+        PlayerMovementInstance = F(PlayerMovement, "instance");
+        ChoiceManagerInstance = F(ChoiceManager, "instance");
+        AvailableChoices = F(ChoiceManager, "availableChoices");
+        ChoiceToReturn = F(ChoiceManager, "choiceToReturn");
+        CurrentOriginBuildSlot = F(ChoiceManager, "currentOriginBuildSlot");
+        ChoiceName = F(Choice, "name");
+        ChoiceTooltip = F(Choice, "tooltip");
+        UpgradeBranches = F(FindType("BuildSlot+Upgrade") ?? FindNested(BuildSlot, "Upgrade"), "upgradeBranches");
+        ChoiceDetails = F(FindType("BuildSlot+UpgradeBranch") ?? FindNested(BuildSlot, "UpgradeBranch"), "choiceDetails");
+
+        SlotsReady =
+            BuildSlot != null &&
+            BuildingInteractor != null &&
+            PlayerInteraction != null &&
+            TryToBuildOrUpgradeAndPay != null &&
+            Harvest != null &&
+            OnUpgradeChoiceComplete != null;
+
+        if (!SlotsReady)
+            Warn(logger, "slot commands will return unsupported_in_this_build until game types load");
     }
 
     public static object? GetStatic(FieldInfo? field) => field == null ? null : field.GetValue(null);
@@ -334,6 +480,18 @@ public static class ReflectionCache
                 // dynamic assemblies can throw
             }
 
+            if (t == null && fullName.IndexOf('.') < 0 && fullName.IndexOf('+') < 0)
+            {
+                try
+                {
+                    t = asm.GetType("Thronefall." + fullName, false);
+                }
+                catch
+                {
+                    // dynamic assemblies can throw
+                }
+            }
+
             if (t != null)
                 return t;
         }
@@ -369,7 +527,8 @@ public static class ReflectionCache
             }
         }
 
-        return Type.GetType(fullName, false);
+        return Type.GetType(fullName, false)
+               ?? Type.GetType(fullName + ", Assembly-CSharp");
     }
 
     static float GetFloat(object obj, string name)

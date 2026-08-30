@@ -21,6 +21,7 @@ public static class PluginConfig
     public static int MaxWorkItemsPerFrame { get; set; } = 8;
 
     public static string DefaultNightPolicy { get; set; } = "human";
+    public static bool TeleportKingNearbyOnSlotAction { get; set; }
 
     public static void Bind(object? config = null)
     {
@@ -55,6 +56,10 @@ public static class PluginConfig
 
         DefaultNightPolicy = BindEntry(config, "Night", "DefaultPolicy", DefaultNightPolicy,
             "Night execution policy: human, afk_castle, or scripted_posts.");
+
+        TeleportKingNearbyOnSlotAction = BindEntry(
+            config, "Slots", "TeleportKingNearbyOnSlotAction", TeleportKingNearbyOnSlotAction,
+            "Teleport the king next to a slot when building or upgrading. Off by default.");
     }
 
     static T BindEntry<T>(object config, string section, string key, T defaultValue, string description)

@@ -74,6 +74,7 @@ public sealed class ServerTests
         Assert.False(PluginConfig.EnableDebugUpgradeToMax);
         Assert.False(PluginConfig.AllowSaveApi);
         Assert.False(PluginConfig.UseCommandUnitsSolver);
+        Assert.False(PluginConfig.TeleportKingNearbyOnSlotAction);
         Assert.Equal(NightPolicies.Human, PluginConfig.DefaultNightPolicy);
         Assert.Equal("127.0.0.1", PluginConfig.BindAddress);
         Assert.Equal(17891, PluginConfig.HttpPort);

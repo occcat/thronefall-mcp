@@ -95,14 +95,14 @@ public sealed class McpClientTests
             ["clientRequestId"] = "h-1"
         }));
         var missingHarvest = Json.Deserialize<ErrorResponse>(ToolText(harvest));
-        Assert.Equal(ErrorCodes.NotFound, missingHarvest!.Error);
+        Assert.Equal(ErrorCodes.UnsupportedInThisBuild, missingHarvest!.Error);
 
         var upgrade = mcp.Rpc(ToolCall(5, "thronefall_slot_upgrade", new Dictionary<string, object?>
         {
             ["id"] = 4412
         }));
         var missingUpgrade = Json.Deserialize<ErrorResponse>(ToolText(upgrade));
-        Assert.Equal(ErrorCodes.NotFound, missingUpgrade!.Error);
+        Assert.Equal(ErrorCodes.UnsupportedInThisBuild, missingUpgrade!.Error);
     }
 
     static Dictionary<string, object?> RpcRequest(int id, string method, Dictionary<string, object?>? @params = null) =>
