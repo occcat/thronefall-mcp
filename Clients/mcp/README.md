@@ -61,7 +61,7 @@ Replace `/ABS/PATH/to/thronefall-mcp` with the clone root. Then
 
 ## Tools
 
-13 tools (see `TOOLS` in `server.py`):
+14 tools (see `TOOLS` in `server.py`):
 
 | Tool | HTTP |
 | --- | --- |
@@ -74,6 +74,7 @@ Replace `/ABS/PATH/to/thronefall-mcp` with the clone root. Then
 | `thronefall_night_call` | `POST /night/call` |
 | `thronefall_units_command` | `POST /units/command` |
 | `thronefall_units_send_to_spawn` | `POST /units/send-to-spawn` |
+| `thronefall_units_deploy` | `POST /units/deploy` |
 | `thronefall_path_toggle` | `POST /path/toggle` |
 | `thronefall_king_teleport` | `POST /king/teleport` |
 | `thronefall_loadout_select` | `POST /loadout/select` |
@@ -81,4 +82,4 @@ Replace `/ABS/PATH/to/thronefall-mcp` with the clone root. Then
 
 `dryRun=true` is forwarded as `?dryRun=true`. Missing `clientRequestId` is filled in.
 
-HTTP already has `POST /units/deploy` (picks / target / hold / spacing=2). MCP has no deploy tool yet — another branch will add it. Until then, call the HTTP path directly.
+`thronefall_units_deploy` maps to `POST /units/deploy` (picks / target / hold / spacing=2).

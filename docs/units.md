@@ -18,7 +18,7 @@
 
 ## deploy：按 picks 瞬移
 
-`POST /units/deploy` 已发布（HTTP；MCP 尚未单独包此工具）：
+`POST /units/deploy` 已发布；MCP 有 `thronefall_units_deploy`：
 
 ```json
 {
