@@ -1,11 +1,9 @@
 namespace ThronefallControl.Dto;
 
-public sealed class LoadoutSelectRequest
+public sealed class LoadoutSelectRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
     public string Name { get; set; } = "";
     public string Kind { get; set; } = "";
-    public bool DryRun { get; set; }
 }
 
 public sealed class LoadoutSelectResult
@@ -20,11 +18,9 @@ public sealed class LoadoutSelectResult
     public bool WouldSelect { get; set; }
 }
 
-public sealed class LevelStartRequest
+public sealed class LevelStartRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
     public string SceneName { get; set; } = "";
-    public bool DryRun { get; set; }
 }
 
 public sealed class LevelStartResult
@@ -38,12 +34,10 @@ public sealed class LevelStartResult
     public bool WouldStart { get; set; }
 }
 
-public sealed class KingTeleportRequest
+public sealed class KingTeleportRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
     public string? Target { get; set; }
     public Vec3Dto? Position { get; set; }
-    public bool DryRun { get; set; }
 }
 
 public sealed class KingTeleportResult
@@ -58,11 +52,9 @@ public sealed class KingTeleportResult
     public bool Teleported { get; set; }
 }
 
-public sealed class NightPolicyRequest
+public sealed class NightPolicyRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
     public string Policy { get; set; } = NightPolicies.Human;
-    public bool DryRun { get; set; }
 }
 
 public sealed class NightPolicyAppliedDto
