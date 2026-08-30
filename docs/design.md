@@ -5,7 +5,7 @@
 | 标题 | Thronefall Local Control Plugin（BepInEx）— 本地 HTTP 执行器 |
 | 作者 | TBD |
 | 日期 | 2026-08-30 |
-| 状态 | Draft |
+| 状态 | 契约以 `GET /openapi.json` 为准 |
 | 目标游戏 | Thronefall v2.13（Steam AppID `2239150`） |
 | 运行时 | Unity 2022.3.62f2 Mono（`MonoBleedingEdge`），`netstandard 2.1.0.0` |
 | 平台 | macOS universal binary `arm64` + `x86_64`，bundle `com.grizzlygames.thronefall` |
@@ -19,7 +19,7 @@
 
 Thronefall 是一款日夜循环的 RTS/塔防：白天在离散 `BuildSlot` 上建造、收税、点升级；夜晚把玩家单位派到世界坐标守线。本仓库实现一个 **BepInEx 5 Mono 插件**，注入正在运行的 Unity Player，在 `127.0.0.1` 上暴露 JSON HTTP API，把已经逆向过的进程内 C# 方法包装成外部 agent（Grok CLI）可调用的观察器 + 执行器。
 
-这 **不是** 云服务，**不是** 多人协议，**不包含** 经济/布阵策略。插件只做三件事：(1) 在主线程安全地读状态；(2) 调用游戏自己的方法改变状态；(3) 把结果以稳定 ID 的 JSON 返回。策略层（先经济还是先兵、单位对塔、spawn-line posting）全部在外部 agent。
+插件在 `127.0.0.1` 上提供观察 + 执行 HTTP：主线程读状态、调用游戏自己的方法、用稳定 ID 回 JSON。经济与布阵策略全部在外部 agent。
 
 ---
 
@@ -66,10 +66,10 @@ Thunderstore 上的 `BepInEx-BepInExPack_Thronefall-5.4.2100` 按 `Thronefall.ex
 1. **观察**：金币 / 能量核 / 净值、日夜、国王 HP/位置/死亡、每个 `BuildSlot`、每个玩家单位、敌军摘要、每条 `EnemySpawnLine`、开路器、当前场景、loadout、战斗数值。
 2. **经济 / 建筑**：进程内收获、建造、升级、选择分支；**不需要国王走到建筑旁**。
 3. **Loadout / 选图**：选 perk/武器/mutator，启动关卡。
-4. **日夜**：在 `PlayerInteraction.IsFreeToCallNight` 为真时调用 `DayNightCycle.SwitchToNight`。默认 **不跳波**。
-5. **单位派遣**：按 id / 类型 / 控制组把单位派到世界坐标；走游戏自己的 placement solver，失败则 fallback 到 `HomePosition` + `HoldPosition` + `SnapToNavmesh`。
+4. **日夜**：`POST /night/call` 仅要求 `phase=day`，调用 `DayNightCycle.SwitchToNight`。不检查 `IsFreeToCallNight`（该字段只在 `/state` 里观察）。默认 **不跳波**。
+5. **单位派遣**：`POST /units/command` 用 `WarpTo` 落到世界坐标，响应仍报 `path=fallback`。另有 `POST /units/deploy`（`picks` / `target` / `hold` / `spacing=2`）。`hold` API 默认 `true`。
 6. **开路**：`CutOpenPathInteractor.ToggleCutPath`（方法本身是 private，见下文反射表）。
-7. **国王便利 + 夜间策略**：传送；`human` / `afk_castle` / `scripted_posts` 三种夜间策略作为 **执行策略**（不是战斗 AI）。
+7. **国王便利 + 夜间策略**：传送；`human` / `afk_castle` / `scripted_posts`。`scripted_posts` 只记 intent，不派兵。默认 `human`。
 8. **本地 HTTP JSON**：仅 loopback，默认端口 `17891`，主线程队列，`clientRequestId`，`dryRun`。
 9. **macOS 安装**：BepInEx 5 unix doorstop + `run_bepinex.sh` 包住 `thronefall.app` + Steam launch options。
 10. **安全默认**：无作弊、无 `DEBUGUpgradeToMax`、无 HP hack；HTTP 绑定失败不影响原版游戏。
@@ -94,14 +94,14 @@ Thunderstore 上的 `BepInEx-BepInExPack_Thronefall-5.4.2100` 按 `Thronefall.ex
 | KD-2 | **策略在插件外** | 插件是 dumb actuator + observer。同一套 API 可以接 Grok CLI、Python 脚本或人工 curl。 |
 | KD-3 | **稳定 ID = `GameObject.GetInstanceID()` + `sceneGeneration`** | instanceID 在场景生命周期内唯一；切场景后 generation 递增，过期 ID 返回 `stale_id` 而不是悄悄打到新对象。建筑额外带 `buildingName`。 |
 | KD-4 | **作弊默认关闭** | `enableDebugCheats=false`，`enableDebugUpgradeToMax=false`。`DEBUGUpgradeToMax`、`Hp.MakeInvulerable`、`EnemySpawner.DebugSkipWave`、`Hp.ReviveAllKnockedOutPlayerUnitsAndBuildings` 全部 gated。 |
-| KD-5 | **单位命令双路径** | 主路径：反射填 `CommandUnits.playerUnitsCommandingBuffer`，再调公开的 `PlaceCommandedUnitsAndCalculateTargetPositions`。Fallback：逐单位 `set_HomePosition` + `set_HoldPosition` + `SnapToNavmesh`。v1 **先实现 fallback**（solver 的 IL 1077 字节，未完整反编译，可能依赖 `commanding` / `toBePlaced` / 鼠标射线）。 |
+| KD-5 | **单位命令双路径** | 默认：`WarpTo` + `FollowPlayer(false)` + `HoldPosition`；`/units/command` 响应仍报 `path=fallback`。可选 solver：反射填 buffer 再调 `PlaceCommandedUnitsAndCalculateTargetPositions`。`POST /units/deploy` 另报 `path=warp`。 |
 | KD-6 | **目标框架 `netstandard2.1` + BepInEx 5 Mono** | `Assembly-CSharp.dll` 的 AssemblyRef 是 `netstandard 2.1.0.0`；游戏带 `netstandard.dll`。不要用 BepInEx 6 IL2CPP 或 net6。 |
 | KD-7 | **只绑 loopback** | `HttpListener.Prefixes = http://127.0.0.1:{port}/`。禁止 `0.0.0.0` / `*`。可选 `X-Thronefall-Token`。 |
 | KD-8 | **v1 不依赖 Harmony** | BepInEx 5 在 Apple Silicon 上 Harmony/MonoMod 会在 preloader 崩（BepInEx#1303）。本插件只需 **直接调用公开 API + 缓存反射调 private**。避免 Harmony 也降低 Unity 2022.3 上 `HarmonyBackend=cecil` 的运维成本。 |
 | KD-9 | **优先公开属性，其次缓存反射** | 例如读 `DayNightCycle.Instance` 而不是 private 字段 `instance`；读 `BuildSlot.Level` 而不是 private `level`。反射只用于确认必须碰到的 private 成员（见 §反射表）。 |
 | KD-10 | **JSON 用游戏已加载的 Newtonsoft.Json** | Managed 目录已有 `Newtonsoft.Json.dll`（692 KB）。不引入 `System.Text.Json`（Unity Mono 不一定有），也不用 `JsonUtility`（不支持 `Dictionary` / 多态）。 |
 | KD-11 | **不硬编码经济数字** | House 2g、Mill 3/4/6、Tower 3/5/15、Barracks 4/8/16 只作为 agent 策略层的先验。插件永远读 live `NextUpgradeOrBuildCost` / `GoldIncome`。 |
-| KD-12 | **HTTP 进程级生命周期（提议默认，见 Open Questions）** | Loadout / 选图发生在菜单。提议从插件 `Awake` 起一直听端口，用 `phase` 字段告诉 agent 当前能否 mutate。 |
+| KD-12 | **HTTP 进程级生命周期全程绑定** | Loadout / 选图发生在菜单。从插件 `Awake` 起一直听端口，用 `phase` 字段告诉 agent 当前能否 mutate。 |
 
 ---
 
@@ -210,8 +210,8 @@ sequenceDiagram
     Units->>CU: PlaceCommandedUnitsAndCalculateTargetPositions()
     Units->>CU: MakeUnitsInBufferHoldPosition() 若 hold
     Units->>CU: ForceCommandingEnd()
-  else fallback（v1 默认先实现）
-    Units->>Units: 对每个单位 set_HomePosition + SnapToNavmesh + set_HoldPosition
+  else fallback（默认；响应 path=fallback）
+    Units->>Units: 对每个单位 WarpTo + FollowPlayer(false) + set_HoldPosition
   end
   Units-->>Plug: CommandResult DTO
   Plug-->>Q: TCS.SetResult
@@ -331,16 +331,15 @@ public readonly struct EntityId
 3. `toBePlaced` 为世界目标（很可能是 `Vector3`，需在实现时用 `FieldInfo.FieldType` 确认）；
 4. 然后才调用 `PlaceCommandedUnitsAndCalculateTargetPositions`，它会按 `unitDistanceFromEachOther` / `maxPositioningRepeats` 做 navmesh snap。
 
-**v1 落地顺序**：
+**已发布路径**：
 
-1. **Fallback first（可合并的 PR）**：对每个单位  
-   `movement.HomePosition = snapped;`  
-   `movement.SnapToNavmesh();`  
-   `movement.HoldPosition = hold;`  
-   `movement.FollowPlayer()` 的反向是 `HoldPosition=true`（`FollowPlayer` 是 public 方法）。  
-   这不走互相间距求解，但能完成“派去这个点并站住”，足够 scripted_posts。
-2. **Solver second**：反射填 buffer + 设 flag + 调 solver。用 2–3 个近战单位在 Neuland 白天做视觉对照：若单位不移动或飞出 navmesh，关掉 solver 配置项 `useCommandUnitsSolver=false`。
-3. **不要** 在 v1 里 Harmony patch `CommandUnits.Update` 去伪造 Rewired 鼠标。
+1. **command 默认 WarpTo**：对每个单位  
+   `movement.WarpTo(snapped);`  
+   `movement.FollowPlayer(false);`  
+   `movement.HoldPosition = hold;`（API 默认 `true`）  
+   `/units/command` 响应仍报 `path=fallback`。
+2. **deploy**：`picks` + `target` + `hold` + `spacing`（默认 2），`WarpTo` 后报 `path=warp`。
+3. **Solver 可选**：反射填 buffer + 设 flag + 调 solver。失败则回退 WarpTo。配置 `UseCommandUnitsSolver=false`。
 
 控制组：`TagManager.ETag.Group1 / Group2 / Group3`。`AddUnitsToGroup` public。清空走反射 `RemoveAllUnitsfromAllGroups`。`ControlGroupUIHelper` / `ControlGroupController` 只是 UI，不必驱动。
 
@@ -360,7 +359,7 @@ public readonly struct EntityId
 - 公开：`SettingsManager.Instance.ResetUnitFormationEveryMorning`、`SetResetUnitsInTheMorning`
 - UI：`SettingsResetUnitsMorning`
 
-**文档给 agent**：若该设置为 true，每天黎明单位会回家。要让夜间岗位跨过白天保留，必须 `HoldPosition=true`，并且理解早晨重置可能清掉非 hold 的 HomePosition。插件在 `/state` 里回传该设置，不擅自改；改设置是可选 `POST /settings/reset-units-morning`。
+**文档给 agent**：若该设置为 true，每天黎明单位会回家。要让夜间岗位跨过白天保留，必须 `HoldPosition=true`，并且理解早晨重置可能清掉非 hold 的 HomePosition。插件在 `/state.settings.resetUnitFormationEveryMorning` 回传该设置，不擅自改。没有 `POST /settings/reset-units-morning`。
 
 ### 升级选择的时序
 
@@ -382,9 +381,9 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | --- | --- | --- |
 | `human` | 不碰战斗、不传送、不改 HoldPosition | 任何国王微操 |
 | `afk_castle` | `PlayerMovement.TeleportTo` 到 `ETag.CastleCenter`；可选让全部玩家单位 `FollowPlayer` 或 hold 在城堡旁 | 默认不 `Hp.MakeInvulerable`（作弊开关关） |
-| `scripted_posts` | 按 spawn-line rally 派遣 + `HoldPosition=true` | 夜间动态补位、追击 |
+| `scripted_posts` | 只记 intent，不派兵 | 不调用 `/units/*`、不改 HoldPosition |
 
-`POST /night/policy` 只是记下当前策略并 **立即执行一次**（白天也可 preset）。真正的“每夜自动”循环属于外部 agent：它看 `/state.phase==day` → 收税建造 → call night → 看 policy。
+`POST /night/policy` 记下策略并执行一次：`human` / `afk_castle` 立刻生效，`scripted_posts` 只记 intent。白天也可 preset。每夜循环属于外部 agent：看 `/state.phase==day` → 收税建造 → 自己派兵 → call night。
 
 ---
 
@@ -431,14 +430,15 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 
 | 方法 | 路径 | 合法 phase | 行为 |
 | --- | --- | --- | --- |
-| GET | `/health` | 任何（含 HTTP 线程可答的子集） | 见下。`alive` 不进主线程；`ready` 进主线程读 phase |
-| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,training,enemies,spawns,loadout,nextWave`（空 include=All，含 nextWave） |
+| GET | `/health` | 任何（HTTP 线程） | 进程存活。不进主线程 |
+| GET | `/health/ready` | 任何 | 进主线程填 `phase` / `scene` / `generation` |
+| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,training,enemies,spawns,loadout,nextWave,cutters`（空 include=All，含 nextWave 与 cutters） |
 | GET | `/state/slots` | `day/night/end_screen` | 仅建筑 |
 | GET | `/state/units` | `day/night` | 玩家单位 |
 | GET | `/state/training` | `day/night` | 兵营训练 / 复活倒计时 |
 | GET | `/state/enemies` | `day/night` | 敌军摘要 |
 | GET | `/state/spawns` | `day/night` | 地图全部 `EnemySpawnLine` + `suggestedRally`。**不是**今晚波次 |
-| GET | `/state/next-wave` | `day/night` | 今晚波次预览。`available=false` 表示读不到，不要编造出线 |
+| GET | `/state/next-wave` | `day/night` | 今晚波次预览。排兵看 `mouths[].enemies`。`available=false` 表示读不到，不要编造出线 |
 | GET | `/state/loadout` | `menu/level_select/day/night` | 已装备名、perk/weapon/mutator 目录、任务、loadout worth |
 | GET | `/openapi.json` | 任何（HTTP 线程） | 静态 OpenAPI 3 文档 |
 | POST | `/harvest` | `day` | 收全部或一个 slot |
@@ -446,15 +446,16 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | POST | `/slots/{id}/upgrade` | `day` | 同上（语义别名） |
 | POST | `/slots/{id}/choice` | `day` | `OnUpgradeChoiceComplete` |
 | POST | `/slots/choice/cancel` | `day` | `ChoiceManager.CancelChoice`。没有进行中的 choice 时 409 `not_found`，不假装 `canceled=true` |
-| POST | `/night/call` | `day` 且 `IsFreeToCallNight` | `DayNightCycle.SwitchToNight` |
-| POST | `/units/command` | `day/night` | 派到世界点 |
+| POST | `/night/call` | `day` | `DayNightCycle.SwitchToNight`。不检查 `IsFreeToCallNight` |
+| POST | `/units/command` | `day/night` | `WarpTo` 到世界点；响应仍报 `path=fallback` |
 | POST | `/units/follow` | `day/night` | `FollowPlayer` |
 | POST | `/units/hold` | `day/night` | `MakeUnitsInBufferHoldPosition` / 设 HoldPosition |
 | POST | `/units/groups` | `day/night` | 1/2/3 控制组 |
 | POST | `/units/send-to-spawn` | `day/night` | 类型 T → spawn line L |
+| POST | `/units/deploy` | `day/night` | `picks` / `target` / `hold` / `spacing=2`，`WarpTo`，`path=warp` |
 | POST | `/path/toggle` | `day`（若 `toogleOnlyAtDay`）/ 按 cutter 自己的约束 | 反射 `ToggleCutPath` |
 | POST | `/king/teleport` | `day/night/level_select` | `TeleportTo` / `TeleportToStart` |
-| POST | `/night/policy` | `day/night` | 设置并执行一次策略 |
+| POST | `/night/policy` | `day/night` | 设置并执行一次。`scripted_posts` 只记 intent，不派兵 |
 | POST | `/loadout/select` | `level_select` | `LoadoutUIHelper.TrySelectEquippableForLoadout` |
 | POST | `/level/start` | `level_select` | `LevelInteractor.InteractionBegin` + `PlayButtonPressed` |
 | POST | `/debug/upgrade-max` | `day` | `DEBUGUpgradeToMax`，需 flag |
@@ -464,7 +465,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 
 **所有 mutate 在 `SceneTransitionIsRunning` 时直接 409 `transition_in_progress`。**
 
-`GET /health`（HTTP 线程即可回答的部分 + 可选主线程）：
+`GET /health` 在 HTTP 线程回答存活。`GET /health/ready` 进主线程填 `phase` / `scene` / `generation`：
 
 ```json
 {
@@ -742,7 +743,21 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 }
 ```
 
-`useSolver=false` 强制 fallback。selector 三选一：ids / typeName / group∈{1,2,3}。
+`hold` API 默认 `true`。`useSolver=false` 强制 WarpTo，响应仍报 `path=fallback`。selector 三选一：ids / typeName / group∈{1,2,3}。
+
+`POST /units/deploy`
+
+```json
+{
+  "clientRequestId": "d1",
+  "picks": [{ "typeName": "P Knight", "count": 4 }],
+  "target": { "x": 12.0, "y": 0.0, "z": -3.0 },
+  "hold": true,
+  "spacing": 2
+}
+```
+
+按 `picks`（`typeName`+`count` 或 `ids`）`WarpTo` 到 `target`，沿 X 按 `spacing`（默认 2）排开。响应 `path=warp`。`hold` 默认 `true`。
 
 `POST /night/call`
 
@@ -750,7 +765,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 { "clientRequestId": "n1" }
 ```
 
-若 `!IsFreeToCallNight` → 409。**不**默认模拟 `NightCall` 的 hold-to-fill；那是 fallback（`NightCall.currentFill` private，`nightCallTime` public）。文档化：正常路径是 `IsFreeToCallNight` + `SwitchToNight`。
+仅要求 `phase=day`。`isFreeToCallNight` 只作观察，不挡召夜。不模拟 `NightCall` 的 hold-to-fill。
 
 `POST /loadout/select`
 
@@ -904,7 +919,7 @@ MainThreadTimeoutMs = 500
 MaxWorkItemsPerFrame = 8
 
 [Night]
-DefaultPolicy = human            # 提议默认；见 Open Questions
+DefaultPolicy = human
 ```
 
 绑定失败：log error，设 `Server.IsListening=false`，**游戏继续**。`/health` 此时不存在，这是可接受的：agent 会连接失败并提示。
@@ -918,6 +933,7 @@ DefaultPolicy = human            # 提议默认；见 Open Questions
 ```bash
 # 健康检查
 curl -s http://127.0.0.1:17891/health
+curl -s http://127.0.0.1:17891/health/ready
 
 # 完整状态（局内）
 curl -s 'http://127.0.0.1:17891/state?include=slots,units,spawns'
@@ -941,9 +957,16 @@ curl -s -X POST http://127.0.0.1:17891/harvest \
 curl -s -X POST http://127.0.0.1:17891/night/call \
   -d '{"clientRequestId":"n-1"}'
 
+# 今晚每口
+curl -s http://127.0.0.1:17891/state/next-wave
+
 # 把近战单位派到 spawn 0 的 rally
 curl -s -X POST http://127.0.0.1:17891/units/send-to-spawn \
   -d '{"clientRequestId":"u-1","typeName":"P Knight","spawnId":220,"hold":true}'
+
+# 按种类数量瞬移
+curl -s -X POST http://127.0.0.1:17891/units/deploy \
+  -d '{"clientRequestId":"d-1","picks":[{"typeName":"P Knight","count":3}],"target":{"x":12,"y":0,"z":-3},"hold":true,"spacing":2}'
 ```
 
 ### 最小 Python 客户端
@@ -991,7 +1014,7 @@ class Thronefall:
         })
 ```
 
-Agent 侧典型白天循环（**不属于插件**）：`state` → 花光 `trueBalance` 在 `canBeUpgraded && cost<=balance` 的 slot 上 → `harvest_all` → `call_night` → 按 policy 发 `send-to-spawn`。
+Agent 侧典型白天循环（**不属于插件**）：`state` → 花光 `trueBalance` 在 `canBeUpgraded && cost<=balance` 的 slot 上 → `harvest_all` → 按 `next-wave.mouths[]` 派兵 → `call_night`。`scripted_posts` 不会代为派兵。
 
 ---
 
@@ -1144,32 +1167,14 @@ public sealed class Plugin : BaseUnityPlugin
 
 ## Alternatives Considered
 
-### 1. OS 级键鼠（cliclick / Accessibility）— 否决为主路径
-
-- 优点：零注入、不触发 BepInEx/doorstop 风险。
-- 缺点：夜晚镜头、单位重叠、国王必须走进 `PlayerInteraction.interactionRadius`；建筑自动化变成寻路问题；macOS 权限弹窗。只保留为“插件挂了时的人工兜底”，不是 API。
-
-### 2. Harmony patch Rewired 合成输入 — 否决为主路径
-
-- 优点：走游戏原输入状态机。
-- 缺点：比直接调 `BuildSlot` 更脆；v1 要避开 Harmony（Mac arm64）。建筑仍然要走路。可作为未来“完全模拟人类”的可选层，不进 v1。
-
-### 3. Unity Python / named pipe / Unix socket — 否决
-
-- 优点：少一圈 HTTP。
-- 缺点：CLI agent、curl、OpenAPI、浏览器调试都更差。localhost HTTP 在 150 ms p99 目标内足够。named pipe 可列为 v2 传输，Facade 不必改。
-
-### 4. 完整战斗 AI（国王微操）— 超出 v1
-
-- 夜间只提供 `human` / `afk_castle` / `scripted_posts` 执行器。Kiting、技能、聚焦火不是本插件的事。
-
-### 5. 未修改的 IL2CPP / Windows BepInEx pack — 否决
-
-- 本 install 是 Mac Mono `.app`。Windows pack 的 doorstop 是 `winhttp.dll`，路径是 `Thronefall.exe`。硬套会静默失败。
-
-### 6. 每帧 Harmony postfix 把状态 dump 到文件 — 否决
-
-- 无请求也产生 IO；agent 还要轮询文件。HTTP 按需拉取更干净。
+| 方案 | 结论 |
+| --- | --- |
+| OS 级键鼠（cliclick / Accessibility） | 否决为主路径：镜头、重叠、交互半径太脆 |
+| Harmony 合成 Rewired 输入 | 否决为主路径：Mac arm64 避 Harmony，建筑仍要走路 |
+| named pipe / Unix socket | 否决：curl / OpenAPI / CLI 都更差 |
+| 完整国王战斗 AI | 超出范围；夜间只提供 `human` / `afk_castle` / `scripted_posts` |
+| Windows IL2CPP Thunderstore pack | 否决：本 install 是 Mac Mono `.app` |
+| 每帧 dump 状态到文件 | 否决：无请求也 IO；HTTP 按需拉取 |
 
 ---
 
@@ -1197,7 +1202,7 @@ public sealed class Plugin : BaseUnityPlugin
 - 级别：`Debug` 打 `/state` 裁剪统计（slot 数、单位数、主线程毫秒）；默认 `Info` 只打 mutate 与错误。
 - 游戏 `Player.log` 仍是 Unity 崩溃的第一现场。
 
-### 指标（插件内环形缓冲，暴露在 `GET /health` 扩展或 `GET /metrics`）
+### 指标（插件内环形缓冲；没有 `GET /metrics`）
 
 - `http_requests_total{path,status}`
 - `main_thread_queue_depth`
@@ -1206,7 +1211,7 @@ public sealed class Plugin : BaseUnityPlugin
 - `stale_id_total`
 - `bind_ok` bool
 
-v1 不必上 Prometheus；JSON 计数器足够。
+计数器留在进程内 / 日志，不单独暴露 HTTP 端点。
 
 ### 告警（给 agent，不是给 SRE）
 
@@ -1237,7 +1242,7 @@ v1 不必上 Prometheus；JSON 计数器足够。
 | 游戏更新重命名 private 字段 | High | 优先公开属性；`ReflectionCache` 软失败；版本钉 v2.13。 |
 | Steam Cloud 同步 debug-max 存档 | High | 默认关作弊；README 警告。 |
 | Choice UI 需要 `ExecuteBuildOrUpgrade` 后一帧 | Medium | 最多等 4 帧；返回 `choice_required` 而不是瞎选。 |
-| `PlaceCommandedUnitsAndCalculateTargetPositions` 依赖输入/射线，IL 未完整反编译 | High | **v1 先 fallback**；solver 作为可选路径；实现阶段再读 `CommandUnits.Update` IL。`toBePlaced` 类型用反射确认。 |
+| `PlaceCommandedUnitsAndCalculateTargetPositions` 依赖输入/射线，IL 未完整反编译 | High | command 默认 `WarpTo` 并仍报 `path=fallback`；solver 作为可选路径。 |
 | `HttpListener` 在 Unity Mono 上的前缀/权限问题 | Medium | prefix 必须带尾 `/`；catch `HttpListenerException`；备选 `TcpListener`+手写 HTTP/1.1（同一 Router）。 |
 | `FindObjectsOfType<BuildSlot>` 在大图（Nordfels 70+ slot）上 > 50 ms | Medium | 场景加载时缓存到 IdRegistry，只在 OnEnable/OnDestroy 增量更新。 |
 | `TryToSelectUnits` private | Low | 不调用，自己填 buffer。 |
@@ -1250,13 +1255,11 @@ v1 不必上 Prometheus；JSON 计数器足够。
 
 ## Open Questions
 
-下列三项 **不在本文拍板**，实现前需要用户确认。括号内是设计提议，不是决议。
+已决议：夜间默认 `human`；HTTP 从 `Awake` 起全程绑定（菜单也能打 loadout / 选图）。
 
-1. **夜间策略默认值**：`human` vs `afk_castle` vs `scripted_posts`？  
-   提议：`human`（插件不碰战斗，避免“装了插件国王就被传走”）。
-2. **HTTP 是否在菜单也绑定**？  
-   提议：进程生命周期全程绑定，否则 loadout/选图 API 无法用。若只想局内控制，可加 `BindOnlyWhenInGame=false`。
-3. **mutate 是否自动 `PlayerMovement.ToggleTimeScale` 暂停**，好让 agent 想下一手？  
+仍未拍板：
+
+1. **mutate 是否自动 `PlayerMovement.ToggleTimeScale` 暂停**，好让 agent 想下一手？  
    提议：默认不自动暂停；提供 `POST /debug/toggle-time-scale`（非作弊，游戏本就有该静态方法）以及可选 config `AutoPauseDuringThink=false`。自动暂停会改变昼夜剩余时间的流逝，必须显式同意。
 
 其它待实现期确认、不阻塞设计：
@@ -1313,81 +1316,3 @@ v1 不必上 Prometheus；JSON 计数器足够。
 - BepInEx 5 Apple Silicon Harmony 崩溃：https://github.com/BepInEx/BepInEx/issues/1303
 - Doorstop macOS arm64：https://github.com/NeighTools/UnityDoorstop/pull/62
 - 本设计逆向范围：TypeDef 3481、MethodDef 17327；关键类型 `BuildSlot`(139)、`CommandUnits`(525)、`BuildingInteractor`(560)、`PathfindMovementPlayerunit`(528)、`DayNightCycle`(170)、`PlayerInteraction`(566)、`TagManager`(665)、`EnemySpawnLine`(320)、`CutOpenPathInteractor`(563)、`LoadoutUIHelper`(800)、`SceneTransitionManager`(478)
-
----
-
-## PR Plan
-
-按可独立 review / 合并的里程碑拆分。新仓库，线性依赖。每个 PR 合并后游戏应仍能启动；HTTP 面只增不改已发布 JSON 字段（允许加字段）。
-
-### PR 1 — 仓库骨架、BepInEx 插件、loopback HTTP、主线程队列
-
-- **标题**：`feat: BepInEx plugin bootstrap with loopback HTTP and main-thread queue`
-- **文件**：`ThronefallControl.csproj`、`Plugin.cs`、`Config/PluginConfig.cs`、`Http/Server.cs`、`Http/Router.cs`、`Http/Json.cs`、`Http/Auth.cs`、`Game/MainThread.cs`、`README.md`（安装草稿）
-- **依赖**：无
-- **内容**：`BaseUnityPlugin` 启动；只绑 `127.0.0.1`；`GET /health`（`alive` 不碰 Unity，`ready` 进主线程读 `Time.frameCount`）；bind 失败不炸游戏；token 头；BepInEx 配置项。尚无游戏逻辑。
-
-### PR 2 — IdRegistry、phase 状态机、`GET /state` 观察面
-
-- **标题**：`feat: observe game state (economy, clock, king, slots, units, spawns)`
-- **文件**：`Game/IdRegistry.cs`、`Game/GameFacade.cs`、`Game/Slots.cs`、`Game/Units.cs`、`Game/DayNight.cs`、`Game/Spawns.cs`、`Game/Paths.cs`、`Game/Loadout.cs`、`Dto/*.cs`、`Http/Router.cs`
-- **依赖**：PR 1
-- **内容**：phase 检测；generation；读所有公开属性列出的观察字段；`GET /state` 与裁剪 query。只读，无 POST mutate。包含 `ETag` 名字映射。目标：Nordfels 白天快照 < 50 ms。
-
-### PR 3 — 建筑：收获 / 建造 / 升级 / 选择分支
-
-- **标题**：`feat: harvest, build, upgrade, and upgrade-choice commands`
-- **文件**：`Game/Slots.cs`、`Game/ReflectionCache.cs`（若需要）、Router、Dto
-- **依赖**：PR 2
-- **内容**：`POST /harvest`、`/slots/{id}/build|upgrade|choice`；`dryRun`；`clientRequestId` 幂等缓存；choice 等待最多 4 帧；可选 `TeleportTo` 靠近建筑（视觉）。非法 phase 拒绝。`DEBUGUpgradeToMax` **不**在本 PR 暴露。
-
-### PR 4 — 日夜切换与开路器
-
-- **标题**：`feat: call night and toggle path cutters`
-- **文件**：`Game/DayNight.cs`、`Game/Paths.cs`、Router
-- **依赖**：PR 2（可与 PR 3 并行，但建议叠在 PR 3 之后以免 Router 冲突）
-- **内容**：`POST /night/call` 仅当 `IsFreeToCallNight`；文档化 NightCall hold-to-fill 为非默认。`POST /path/toggle` 反射 `IsToggleValidToUse` / `ToggleCutPath`。不跳波。
-
-### PR 5 — 单位：列表 + HomePosition fallback 派遣
-
-- **标题**：`feat: command units via HomePosition fallback`
-- **文件**：`Game/Units.cs`、Router、Dto
-- **依赖**：PR 2
-- **内容**：`POST /units/command|hold|follow` 走 `set_HomePosition` / `set_HoldPosition` / `FollowPlayer` / `SnapToNavmesh` / `GetNearestGroundPosition`。按 ids / typeName / group 选择。`UseCommandUnitsSolver` 此时忽略或强制 false。文档化早晨重置与 HoldPosition。
-
-### PR 6 — CommandUnits solver、控制组、send-to-spawn
-
-- **标题**：`feat: CommandUnits placement solver, control groups, spawn-line rally`
-- **文件**：`Game/Units.cs`、`Game/Spawns.cs`、`Game/ReflectionCache.cs`
-- **依赖**：PR 5
-- **内容**：反射填 `playerUnitsCommandingBuffer` + `toBePlaced`；调用 `PlaceCommandedUnitsAndCalculateTargetPositions`、`MakeUnitsInBufferHoldPosition`、`ForceCommandingEnd`、`AddUnitsToGroup`；反射 `RemoveAllUnitsfromAllGroups`。`POST /units/groups`、`/units/send-to-spawn`。Neuland 人工验证；失败则 config 回退 PR 5 路径。
-
-### PR 7 — Loadout 与选图开局
-
-- **标题**：`feat: loadout selection and level start`
-- **文件**：`Game/Loadout.cs`、Router、Dto
-- **依赖**：PR 2
-- **内容**：读锁定/未锁定、剩余 perk 点、`currentLoadoutAsString`。`POST /loadout/select`（`TrySelectEquippableForLoadout` / `SelectPerk` / `Pick` / `UnPick`）。`POST /level/start`（`LevelInteractor.InteractionBegin` + `PlayButtonPressed`）。合法 phase = `level_select`。
-
-### PR 8 — 国王传送与夜间策略执行器
-
-- **标题**：`feat: king teleport helpers and night policies`
-- **文件**：`Game/King.cs`、`Game/Units.cs`、Router
-- **依赖**：PR 5（scripted_posts 需要派遣）；PR 6 更佳但可用 fallback
-- **内容**：`POST /king/teleport`（`start` / `castle` / named slot）。`POST /night/policy` 实现 `human` / `afk_castle` / `scripted_posts`。默认不 invulnerable。
-
-### PR 9 — 安全打磨、gated debug、OpenAPI、Python 客户端
-
-- **标题**：`feat: dry-run polish, gated debug endpoints, OpenAPI, python client`
-- **文件**：`Http/OpenApi.cs`、`Clients/thronefall_control.py`、debug routes、README API 节
-- **依赖**：PR 3–8
-- **内容**：统一错误码；`GET /openapi.json`；`GET /metrics`；`/debug/*` 全部检查 `EnableDebugCheats` / `EnableDebugUpgradeToMax` / `AllowSaveApi`。Python 客户端与 curl 示例。确认 `ToggleTimeScale` 仅作为显式 debug。
-
-### PR 10 — macOS 安装脚本与 Steam 启动文档
-
-- **标题**：`docs: macOS BepInEx doorstop install and Steam launch options`
-- **文件**：`README.md`、`Scripts/install_macos.sh`、`Scripts/run_bepinex.example.sh`
-- **依赖**：PR 1（文档可提前写，但脚本应在插件能 `/health` 之后验证）
-- **内容**：unix pack vs Windows Thunderstore pack 对照；`executable_name=thronefall.app`；绝对路径 launch options；quarantine；Apple Silicon / Rosetta 说明；卸载步骤；日志路径。在本机 M 系列实机走一遍并把结果写入 README。
-
-每个 PR 的合并门槛：在 `Neuland(Tutorial)` 或 `Nordfels` 上手工 curl 一遍新增端点；`Player.log` 无未捕获异常；关掉插件后游戏可原版启动。
