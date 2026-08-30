@@ -1,6 +1,8 @@
 # Thronefall 图鉴
 
-选建筑、选分支、选兵、对怪时读这份。格子名字用 `buildingName`，我方兵用 `typeName`，今晚的怪用 `mouths[].enemies[].name`。费用和具体数字以局内 `tooltip` / `nextUpgradeOrBuildCost` 为准。
+选建筑、选分支、选兵、对怪、读 loadout 时读这份。格子用 `buildingName`，我方兵用 `typeName`，今晚的怪用 `mouths[].enemies[].name`，装备用 `loadout.catalog[].name`（拼写以 catalog 为准）。费用以局内 `tooltip` 为准。
+
+国王由用户操控，代操不替用户打。武器和国王向 perk 用来写当晚操作建议，不用来排兵假装国王会清线。
 
 先记三句：`E Ogre` 是人类，猎人无效。飞兵常见名是 `E Flyer`。火焰弓手是溅射打攻城，不是只打飞。
 
@@ -234,4 +236,135 @@
 
 ---
 
-正文来自游戏中文和局内 tooltip。数字以当前对局为准。
+## 挑战（mutator）
+
+开局在 `loadout.catalog` 里，`kind=mutator`。多数是加难度换分数。叠在一起会改整局经济、兵种和守口方式。
+
+### 神祇
+
+| catalog 名 | 做什么 | 代操怎么改 |
+|---|---|---|
+| Challenge the Snake God | 敌人掉的金变少。赢了约 +20% 分 | 更靠建筑收入，少指望收尸金 |
+| Challenge the Tiger God | 敌人打得更痛。赢了约 +20% 分 | 兵要更肉或更分散；Elite Warriors、骑士优先 |
+| Challenge the Turtle God | 敌人更肉。赢了约 +20% 分（wiki 写 +40%，以 catalog 为准） | 要持续输出；猎人打怪、狂战打攻城更值 |
+| Challenge the Falcon God | 敌人更快。赢了约 +20% 分 | 矛兵、路障；别让飞速怪摸到城堡 |
+| Challenge the Wasp God | 前三波敌人数量加倍。赢了约 +20% 分 | 前三夜先爆兵，晚开矿和远田 |
+| Challenge the Rat God | 夜里单位慢慢掉血（可掉到一成），国王自回变慢。赢了约 +20% 分 | 治疗、Health Potions、别把兵晾在外面空转 |
+| Challenge the God of Destruction | 建筑每天只回约三成血；拆掉的要多一天才修。赢了约 +20% 分 | 别让经济建筑被拆；墙当一次性 |
+| Challenge the Phoenix God | 敌人每秒回 4% 血（有上限）。不算 Boss。赢了约 +20% 分 | 要集火秒掉，别磨；溅射清杂兵 |
+| Challenge the Elite God | 每第三个刷出精英（约 4 倍血、3 倍伤） | 当小 Boss 打；骑士挡，点名输出 |
+| Challenge the Growth God | 敌人每晚变强 | 后期比前期难；早经济，晚全力防御 |
+| Challenge the Range God | 地面远程更肉、更远、更痛、更快 | 骑士顶、弩手对射；矛兵别去对射 |
+| Challenge the God of Chaos | 敌人在全图随机出生，出现后几秒不能打 | 不能只守 `mouths[]` 的固定口；兵要能改岗，经济别摊太开 |
+| Challenge the God of Afterlife | 打死的敌人会延迟复活 | 击杀点要还能守；别以为清完就安全 |
+| Challenge the God of Death | 友军夜里不复活，国王复活更慢 | 兵死不起；Elite Warriors 更要护 |
+| Challenge the God of Choice | 限制可选 perk | 先看还剩哪些 perk，再定本局策略 |
+| Pray to the War Gods | 敌人少约 20% 血和伤害，分数约 -40% | 唯一减负。分数任务别开 |
+
+### 契约
+
+选了就是硬禁令，建造和派兵必须遵守。
+
+| catalog 名 | 禁令 | 代操 |
+|---|---|---|
+| No Walls Pact | 不能造墙 | 用兵和隘口，不点 Wall |
+| No Towers Pact | 不能造塔 | 兵换口；一级塔方案作废 |
+| No Units Pact | 不能造兵 | 只经济 + 塔墙；国王用户自己打 |
+| Pacifist Pact | 国王不能攻击 | 单位和建筑必须能自己赢。Commander Mode 变强，Warrior Mode 变废 |
+
+---
+
+## 能力（perk）
+
+开局最多约 5 个（后期槽更多）。名字以 `catalog[].name` 为准，游戏里常拼错。
+
+### 先看本局约束
+
+当前装备在 `loadout.asString`。下面几个会改整局打法：
+
+| catalog 名 | 效果 | 代操 |
+|---|---|---|
+| Commander Mode | 单位和建筑伤害大增，国王自己变弱 | 靠兵和塔赢。别等用户国王清线 |
+| Warrior Mode | 国王武器每晚变强，单位和建筑变弱 | 兵只挡不杀；经济安全，让用户国王输出 |
+| Elite Warriors | 单位双倍血，复活更慢 | 人少但肉。别无谓送；看 `training` 再算够不够 |
+| Gladiator School | 训练快，兵营略贵 | 可以晚一点补兵营；死人补得快 |
+| Architect's Council | 城堡升级提前一档解锁格子 | 可以早计划下一档建筑，不必立刻升城堡 |
+| Royal Mint | 城堡产金，升城堡产得更多 | 升城堡也是经济 |
+
+国王向：`Heavy Armor`、`Glass Canon`、`War Horse`、`Gods Lotion`、`Light Materials`、`Spell Scroll`、`Risk Taker`、`Ring of Resurection`、`Healing Gold`、`Explosive Revival`、`Agile Horse`、`Royal Protection`。不改变你造什么，只改变当晚告诉用户国王能抗、能砍多少。
+
+### 经济
+
+| catalog 名 | 效果 | 何时算进去 |
+|---|---|---|
+| Royal Mint | 城堡每晚产金，随城堡等级加 | 几乎总有用 |
+| Big Harbours | 港口多 2 艘船，更肉，常立刻有一艘 | 有港的图 |
+| Pumpkin Fields | 田收入更高、更肉，但更贵 | 田多的图；1 金田的默认账要改 |
+| Faster Research | 铁匠研究少一天，升级常 -1 金 | 夜数够、会点铁匠 |
+| Treasure Hunter | 最后几波前额外给金（catalog 写终夜前 40） | 后期图 |
+| Indestructible Mines | 矿砸不烂 | 有矿、敌人会碾矿 |
+| Loan | 开局多金，敌人掉的前几金作废 | 抢开局，后面少收尸金 |
+| Interest | 每晚按箱子剩金给利息（常见每 3 金 1 息） | 故意留余钱时 |
+| Sustainable Mining | 矿 +1 收入，被拆后收入重置 | 有矿 |
+
+### 单位
+
+| catalog 名 | 效果 | 何时算进去 |
+|---|---|---|
+| Elite Warriors | 双倍血，复活慢 | 要质量 |
+| Commander Mode | 兵和建筑强，国王弱 | 要军队 |
+| Warrior Mode | 反过来 | 要用户国王 |
+| Gladiator School | 训练快，兵营贵 | 要快速补人 |
+| Archery Skills | 远程打得更远 | 出箭塔 |
+| Stronger Heros | 英雄更肉更痛 | 有英雄营 |
+| Health Potions | 单位持续回血 | 有 Rat God、磨夜 |
+| Experience Gain | 从兵营复活的单位当夜叠攻击和血 | 死人多的夜 |
+| Pristine Archers | 远程更贵，但更痛更肉 | 少而精的箭 |
+| Pristine Warriors | 近战更贵，但更痛更肉 | 少而精的近战 |
+| Cobbler | 近战走得更快 | 要换口 |
+| Melee Damage / Ranged Damage | 你、单位、建筑开局加近战或远程伤 | 对应兵种多 |
+
+### 防御与建筑
+
+| catalog 名 | 效果 | 何时算进去 |
+|---|---|---|
+| Arcane Towers | 塔更远、弹更痛 | 要点塔时 |
+| Caslte Fortifications | 城堡更肉、打得更远更快 | 城堡会挨打 |
+| Castle Blueprints | 墙和塔更肉 | 要墙塔 |
+| Fortified Houses | 二级房子很肉，会射箭 | 房子能当小防御 |
+| Resilient Residences | 房子更肉，重生后立刻继续交税 | 房子会被拆 |
+| Power Tower | 离国王最近的塔射速暴增 | 用户会站塔边 |
+| Elite Towers | 当天新建或新升的塔，当夜更痛 | 当天升的塔当主力 |
+| Timber Scaffolding | 塔升级不再受城堡等级限制，造价常 -1 | 想早升塔 |
+| Explosive Walls | 墙被拆会炸，等级越高越痛 | 墙当诱饵 |
+| Emergency Repairs | 战斗中墙互相匀血 | 有一排墙 |
+| Last Stand | 城堡血过半以下，当夜复活全部塔一次 | 塔多、怕崩 |
+| Outpost | 开局远处两座免费塔 | 远口有现成塔 |
+| Double Healing | 治疗塔能奶两个 | 有治疗尖塔 |
+| Ancient Shrines | 神龛免费、弹更痛，但要点亮更费 | 有神龛 |
+| Relentless Research | 研究建筑被拆重生后立刻接着研究 | 铁匠会挨打 |
+| Anti Air Telescope | 飞兵少 25% 血和伤害 | 飞兵图 |
+| Melee Resistence / Ranged Resistence | 你、单位、建筑抗近战或远程 | 对应压力 |
+| Ice Magic | 减速更狠、更久 | 有矛兵、弹道塔、冰 |
+
+---
+
+## 武器
+
+`catalog` 名如下。被动是自动打，主动是用户按技能。
+
+| catalog 名 | 被动 | 主动 | 国王今晚怎么打 |
+|---|---|---|---|
+| Heavy Sword | 慢近战溅射，打堆 | 更大一圈、更高伤 | 站进人堆里砍。主动等敌人挤在一起再放 |
+| Light Spear | 快近战；对快敌加伤并减速 | 回血并短时间攻速；血低于三成持续时间更长 | 去拦 `E Racer`、骑兵、快地走。残血再开主动 |
+| Long Bow | 快远程，打大多数单位；打攻城弱 | 近身匕首巨伤；目标血越低冷却越短 | 站后排射人。攻城别用弓，贴上去用匕首。残血补刀刷冷却 |
+| Lightning Wand | 同时打范围内所有人；靠太近的打不齐；对飞有加成 | 脚下炸一小圈高溅射 | 去打散开的和飞的。别站进人堆正中心 |
+| Battle Axe | 身边小圈溅射，吸血，对攻城加伤；打不到飞 | 短时护盾，免疫伤害 | 贴攻城和地面群。飞的交给塔和远程。要挨打时开盾 |
+| Falchion and Trap | 爆发；对怪物加伤；补刀回血 | 地上放陷阱，可连放三个，要充能才满伤 | 点名怪物和高血。陷阱放必经之路，不要扔在空地 |
+| Potion Vials | 范围内减速并伤害，同时奶友军和自己；只对地；优先治疗 | 更大一圈减速伤害并奶 | 站在己方兵堆里奶。地面口有用，飞的别管 |
+| Blood Wand | 中距快打；盯同一目标伤害每秒涨；站住涨得更快 | 按自己当前血量砸伤害，自己会减速 | 盯一个打，尽量站住叠层。主动会自残，别在残血乱按 |
+| Cursed Blowpipe | 给附近上诅咒，并打所有已被诅咒的 | 清掉所有诅咒，并对他们造成大量伤害 | 先沾几个再引爆。飞的用别的手段 |
+
+---
+
+正文来自游戏中文、局内 `loadout.catalog` 和 tooltip。数字以当前对局为准。
