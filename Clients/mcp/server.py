@@ -193,6 +193,10 @@ def tool_units_send_to_spawn(arguments: dict[str, Any]) -> dict[str, Any]:
     return proxy_post("/units/send-to-spawn", arguments)
 
 
+def tool_units_deploy(arguments: dict[str, Any]) -> dict[str, Any]:
+    return proxy_post("/units/deploy", arguments)
+
+
 def tool_path_toggle(arguments: dict[str, Any]) -> dict[str, Any]:
     return proxy_post("/path/toggle", arguments)
 
@@ -241,7 +245,7 @@ TOOLS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "include": {
-                    "description": "Comma-separated slices: slots,units,enemies,spawns,loadout,nextWave.",
+                    "description": "Comma-separated slices: slots,units,training,enemies,spawns,loadout,nextWave,cutters.",
                     "anyOf": [
                         {"type": "string"},
                         {"type": "array", "items": {"type": "string"}},
@@ -366,6 +370,34 @@ TOOLS: list[dict[str, Any]] = [
             "additionalProperties": True,
         },
         "handler": tool_units_send_to_spawn,
+    },
+    {
+        "name": "thronefall_units_deploy",
+        "description": "POST /units/deploy. Pick counts by type or ids and warp them to a world point.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "clientRequestId": CLIENT_REQUEST,
+                "dryRun": DRY_RUN,
+                "picks": {
+                    "type": "array",
+                    "description": "Unit picks: typeName+count and/or ids.",
+                    "items": {"type": "object"},
+                },
+                "target": {
+                    "type": "object",
+                    "properties": {
+                        "x": {"type": "number"},
+                        "y": {"type": "number"},
+                        "z": {"type": "number"},
+                    },
+                },
+                "hold": {"type": "boolean"},
+                "spacing": {"type": "number"},
+            },
+            "additionalProperties": True,
+        },
+        "handler": tool_units_deploy,
     },
     {
         "name": "thronefall_path_toggle",
