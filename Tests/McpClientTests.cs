@@ -15,6 +15,7 @@ public sealed class McpClientTests
     {
         "thronefall_health",
         "thronefall_state",
+        "thronefall_next_wave",
         "thronefall_harvest",
         "thronefall_slot_upgrade",
         "thronefall_night_call",

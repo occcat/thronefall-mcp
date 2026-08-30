@@ -141,6 +141,11 @@ def tool_state(arguments: dict[str, Any]) -> dict[str, Any]:
     return http_json("GET", "/state", query=query)
 
 
+def tool_next_wave(arguments: dict[str, Any]) -> dict[str, Any]:
+    _ = arguments
+    return http_json("GET", "/state/next-wave")
+
+
 def tool_harvest(arguments: dict[str, Any]) -> dict[str, Any]:
     return proxy_post("/harvest", arguments)
 
@@ -219,7 +224,7 @@ TOOLS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "include": {
-                    "description": "Comma-separated slices: slots,units,enemies,spawns,loadout.",
+                    "description": "Comma-separated slices: slots,units,enemies,spawns,loadout,nextWave.",
                     "anyOf": [
                         {"type": "string"},
                         {"type": "array", "items": {"type": "string"}},
@@ -229,6 +234,16 @@ TOOLS: list[dict[str, Any]] = [
             "additionalProperties": False,
         },
         "handler": tool_state,
+    },
+    {
+        "name": "thronefall_next_wave",
+        "description": "GET /state/next-wave. Tonight's wave preview (not the map-wide spawn catalog).",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        "handler": tool_next_wave,
     },
     {
         "name": "thronefall_harvest",
