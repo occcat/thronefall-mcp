@@ -89,7 +89,7 @@ public static class OpenApi
             ["/state/units"] = new Dictionary<string, object> { ["get"] = Op("GetUnits", "Player units. Legal in day/night.") },
             ["/state/enemies"] = new Dictionary<string, object> { ["get"] = Op("GetEnemies", "Enemy summary. Legal in day/night.") },
             ["/state/spawns"] = new Dictionary<string, object> { ["get"] = Op("GetSpawns", "Spawn lines and suggested rallies.") },
-            ["/state/loadout"] = new Dictionary<string, object> { ["get"] = Op("GetLoadout", "Current perk/weapon string. Legal in menu/level_select/day/night.") },
+            ["/state/loadout"] = new Dictionary<string, object> { ["get"] = Op("GetLoadout", "Equipped names plus perk/weapon/mutator catalog, quests, and loadout worth. Legal in menu/level_select/day/night.") },
             ["/openapi.json"] = new Dictionary<string, object>
             {
                 ["get"] = Op("GetOpenApi", "OpenAPI 3 document. Served on the HTTP thread.")
