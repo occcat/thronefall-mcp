@@ -22,6 +22,8 @@ public sealed class Plugin : BaseUnityPlugin
         try
         {
             PluginConfig.Bind(Config);
+            ReflectionCache.TryInit(Logger);
+            GameFacade.Current ??= new GameFacade();
             _mainThread = MainThread.Current ?? new MainThread();
             MainThread.Current = _mainThread;
             HealthModule.FrameCountReader = ReadFrameCount;
@@ -43,6 +45,7 @@ public sealed class Plugin : BaseUnityPlugin
     {
         try
         {
+            GameFacade.Current?.Tick();
             _mainThread?.Pump();
         }
         catch (Exception ex)

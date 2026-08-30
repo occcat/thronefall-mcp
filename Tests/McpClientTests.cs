@@ -85,8 +85,10 @@ public sealed class McpClientTests
         {
             ["include"] = "slots,units"
         }));
-        var missingState = Json.Deserialize<ErrorResponse>(ToolText(state));
-        Assert.Equal(ErrorCodes.NotFound, missingState!.Error);
+        var snapshot = Json.Deserialize<StateDto>(ToolText(state));
+        Assert.NotNull(snapshot);
+        Assert.True(snapshot!.Ok);
+        Assert.False(string.IsNullOrEmpty(snapshot.Phase));
 
         var harvest = mcp.Rpc(ToolCall(4, "thronefall_harvest", new Dictionary<string, object?>
         {

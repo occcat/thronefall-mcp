@@ -6,6 +6,7 @@ using Xunit;
 
 namespace ThronefallControl.Tests;
 
+[Collection(GameFacadeCollection.Name)]
 public sealed class RouterTests
 {
     [Fact]
@@ -86,6 +87,26 @@ public sealed class RouterTests
     }
 
     [Fact]
+    public void State_module_is_discovered()
+    {
+        var previous = GameFacade.Current;
+        GameFacade.Current = new GameFacade(new EmptyWorld());
+        try
+        {
+            var router = Router.CreateDefault();
+            var res = router.Dispatch(RequestContext.Create("GET", "/state"));
+            Assert.Equal(200, res.Status);
+            var body = Json.Deserialize<StateDto>(res.Body);
+            Assert.True(body!.Ok);
+            Assert.False(string.IsNullOrEmpty(body.Phase));
+        }
+        finally
+        {
+            GameFacade.Current = previous;
+        }
+    }
+
+    [Fact]
     public void Unknown_route_is_not_found()
     {
         var router = Router.CreateDefault();
@@ -129,5 +150,17 @@ public sealed class RouterTests
         var res = router.Dispatch(RequestContext.Create("GET", "/probe"));
         Assert.Equal(200, res.Status);
         Assert.Contains("probe", res.Body);
+    }
+
+    sealed class EmptyWorld : IWorld
+    {
+        public WorldHints Hints() => new() { SceneState = "MainMenu", SceneName = "_StartMenu" };
+
+        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
+        {
+            _ = facade;
+            _ = include;
+            dto.Level = new LevelDto { SceneName = "_StartMenu" };
+        }
     }
 }

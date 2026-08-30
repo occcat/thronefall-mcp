@@ -45,21 +45,43 @@ public sealed class HealthModule : IRouteModule
         }
     }
 
-    static HealthResponse Snapshot(bool ready, int frameCount) => new()
+    static HealthResponse Snapshot(bool ready, int frameCount)
     {
-        Ok = true,
-        Plugin = "ThronefallControl",
-        Version = PluginInfo.Version,
-        GameVersion = PluginInfo.GameVersion,
-        Bound = $"{PluginConfig.BindAddress}:{PluginConfig.HttpPort}",
-        Phase = null,
-        Generation = 0,
-        Scene = null,
-        CheatsEnabled = PluginConfig.EnableDebugCheats,
-        UptimeSeconds = PluginInfo.UptimeSeconds,
-        Ready = ready,
-        FrameCount = frameCount
-    };
+        string? phase = null;
+        var generation = 0;
+        string? scene = null;
+        try
+        {
+            var facade = GameFacade.Current;
+            if (facade != null)
+            {
+                phase = facade.Phase;
+                generation = facade.Ids.SceneGeneration;
+                if (!string.IsNullOrEmpty(facade.Scene))
+                    scene = facade.Scene;
+            }
+        }
+        catch
+        {
+            // /health must stay alive even if observation is unavailable
+        }
+
+        return new HealthResponse
+        {
+            Ok = true,
+            Plugin = "ThronefallControl",
+            Version = PluginInfo.Version,
+            GameVersion = PluginInfo.GameVersion,
+            Bound = $"{PluginConfig.BindAddress}:{PluginConfig.HttpPort}",
+            Phase = phase,
+            Generation = generation,
+            Scene = scene,
+            CheatsEnabled = PluginConfig.EnableDebugCheats,
+            UptimeSeconds = PluginInfo.UptimeSeconds,
+            Ready = ready,
+            FrameCount = frameCount
+        };
+    }
 
     static int ReadFrameCount()
     {
