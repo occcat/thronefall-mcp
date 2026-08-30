@@ -16,10 +16,39 @@ static class UnityAccess
     const BindingFlags Declared = AnyInstance | BindingFlags.DeclaredOnly;
 
     static readonly Dictionary<string, Type?> Types = new(StringComparer.Ordinal);
+    static readonly Dictionary<(Type Type, string Name), MemberInfo?> InstanceMembers = new();
+    static readonly Dictionary<(Type Type, string Name), MemberInfo?> StaticMembers = new();
+    static readonly Dictionary<(Type Type, string Name, int Argc), MethodInfo?> InstanceMethods = new();
     static readonly object Gate = new();
     static bool _scanned;
     static Assembly? _game;
     static Assembly? _unity;
+    static MethodInfo? _findObjectsOfType;
+    static MethodInfo? _findObjectOfType;
+
+    [ThreadStatic]
+    static RequestCache? _request;
+
+    internal static bool TraceLookups = false;
+    internal static int PropertyLookups = 0;
+    internal static int MethodLookups = 0;
+    internal static int FindObjectsLookups = 0;
+    internal static int SingletonLookups = 0;
+
+    internal static void ResetLookupTrace()
+    {
+        PropertyLookups = 0;
+        MethodLookups = 0;
+        FindObjectsLookups = 0;
+        SingletonLookups = 0;
+    }
+
+    internal static IDisposable BeginRequestScope()
+    {
+        var previous = _request;
+        _request = new RequestCache();
+        return new ScopeReleaser(previous);
+    }
 
     public static void Warmup()
     {
@@ -44,70 +73,39 @@ static class UnityAccess
 
     public static object? Singleton(string typeName, string member = "instance")
     {
-        var t = FindType(typeName);
-        if (t == null)
-            return null;
-        try
-        {
-            var p = t.GetProperty(member, AnyStatic);
-            if (p != null)
-                return Alive(p.GetValue(null));
-            var f = t.GetField(member, AnyStatic);
-            if (f != null)
-                return Alive(f.GetValue(null));
-        }
-        catch
-        {
-            return null;
-        }
+        var cache = _request;
+        var key = (typeName, member);
+        if (cache != null && cache.Singletons.TryGetValue(key, out var hit))
+            return hit;
 
-        return null;
+        var found = ReadSingleton(typeName, member);
+        if (cache != null)
+            cache.Singletons[key] = found;
+        return found;
     }
 
     public static object[] FindObjects(string typeName)
     {
-        var t = FindType(typeName);
-        var objType = FindType("UnityEngine.Object");
-        if (t == null || objType == null)
-            return Array.Empty<object>();
-        try
-        {
-            var mi = objType.GetMethod("FindObjectsOfType", AnyStatic, null, new[] { typeof(Type) }, null);
-            if (mi == null)
-                return Array.Empty<object>();
-            if (mi.Invoke(null, new object[] { t }) is not Array arr)
-                return Array.Empty<object>();
-            var list = new List<object>(arr.Length);
-            for (var i = 0; i < arr.Length; i++)
-            {
-                var item = Alive(arr.GetValue(i));
-                if (item != null)
-                    list.Add(item);
-            }
+        var cache = _request;
+        if (cache != null && cache.Objects.TryGetValue(typeName, out var hit))
+            return hit;
 
-            return list.ToArray();
-        }
-        catch
-        {
-            return Array.Empty<object>();
-        }
+        var found = ScanObjects(typeName);
+        if (cache != null)
+            cache.Objects[typeName] = found;
+        return found;
     }
 
     public static object? FindObject(string typeName)
     {
-        var t = FindType(typeName);
-        var objType = FindType("UnityEngine.Object");
-        if (t == null || objType == null)
-            return null;
-        try
-        {
-            var mi = objType.GetMethod("FindObjectOfType", AnyStatic, null, new[] { typeof(Type) }, null);
-            return Alive(mi?.Invoke(null, new object[] { t }));
-        }
-        catch
-        {
-            return null;
-        }
+        var cache = _request;
+        if (cache != null && cache.One.TryGetValue(typeName, out var hit))
+            return hit;
+
+        var found = ScanObject(typeName);
+        if (cache != null)
+            cache.One[typeName] = found;
+        return found;
     }
 
     public static int InstanceId(object obj)
@@ -160,17 +158,11 @@ static class UnityAccess
             return null;
         try
         {
-            var t = obj.GetType();
-            while (t != null && t != typeof(object))
-            {
-                var p = t.GetProperty(member, Declared);
-                if (p != null)
-                    return p.GetValue(obj);
-                var f = t.GetField(member, Declared);
-                if (f != null)
-                    return f.GetValue(obj);
-                t = t.BaseType;
-            }
+            var info = ResolveInstance(obj.GetType(), member);
+            if (info is PropertyInfo p)
+                return p.GetValue(obj);
+            if (info is FieldInfo f)
+                return f.GetValue(obj);
         }
         catch
         {
@@ -187,11 +179,10 @@ static class UnityAccess
             return null;
         try
         {
-            var p = t.GetProperty(member, AnyStatic);
-            if (p != null)
+            var info = ResolveStatic(t, member);
+            if (info is PropertyInfo p)
                 return p.GetValue(null);
-            var f = t.GetField(member, AnyStatic);
-            if (f != null)
+            if (info is FieldInfo f)
                 return f.GetValue(null);
         }
         catch
@@ -208,25 +199,7 @@ static class UnityAccess
             return null;
         try
         {
-            var t = obj.GetType();
-            MethodInfo? mi = null;
-            while (t != null && t != typeof(object))
-            {
-                foreach (var cand in t.GetMethods(Declared))
-                {
-                    if (cand.Name != method)
-                        continue;
-                    if (cand.GetParameters().Length != args.Length)
-                        continue;
-                    mi = cand;
-                    break;
-                }
-
-                if (mi != null)
-                    break;
-                t = t.BaseType;
-            }
-
+            var mi = ResolveMethod(obj.GetType(), method, args.Length);
             return mi?.Invoke(obj, args);
         }
         catch
@@ -461,6 +434,194 @@ static class UnityAccess
         return null;
     }
 
+    static object? ReadSingleton(string typeName, string member)
+    {
+        if (TraceLookups)
+            SingletonLookups++;
+        var t = FindType(typeName);
+        if (t == null)
+            return null;
+        try
+        {
+            var info = ResolveStatic(t, member);
+            if (info is PropertyInfo p)
+                return Alive(p.GetValue(null));
+            if (info is FieldInfo f)
+                return Alive(f.GetValue(null));
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    static object[] ScanObjects(string typeName)
+    {
+        if (TraceLookups)
+            FindObjectsLookups++;
+        var t = FindType(typeName);
+        if (t == null)
+            return Array.Empty<object>();
+        var mi = FindObjectsOfTypeMethod();
+        if (mi == null)
+            return Array.Empty<object>();
+        try
+        {
+            if (mi.Invoke(null, new object[] { t }) is not Array arr)
+                return Array.Empty<object>();
+            var list = new List<object>(arr.Length);
+            for (var i = 0; i < arr.Length; i++)
+            {
+                var item = Alive(arr.GetValue(i));
+                if (item != null)
+                    list.Add(item);
+            }
+
+            return list.ToArray();
+        }
+        catch
+        {
+            return Array.Empty<object>();
+        }
+    }
+
+    static object? ScanObject(string typeName)
+    {
+        var t = FindType(typeName);
+        if (t == null)
+            return null;
+        var mi = FindObjectOfTypeMethod();
+        if (mi == null)
+            return null;
+        try
+        {
+            return Alive(mi.Invoke(null, new object[] { t }));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static MethodInfo? FindObjectsOfTypeMethod()
+    {
+        if (_findObjectsOfType != null)
+            return _findObjectsOfType;
+        var objType = FindType("UnityEngine.Object");
+        var mi = objType?.GetMethod("FindObjectsOfType", AnyStatic, null, new[] { typeof(Type) }, null);
+        if (mi != null)
+            _findObjectsOfType = mi;
+        return mi;
+    }
+
+    static MethodInfo? FindObjectOfTypeMethod()
+    {
+        if (_findObjectOfType != null)
+            return _findObjectOfType;
+        var objType = FindType("UnityEngine.Object");
+        var mi = objType?.GetMethod("FindObjectOfType", AnyStatic, null, new[] { typeof(Type) }, null);
+        if (mi != null)
+            _findObjectOfType = mi;
+        return mi;
+    }
+
+    static MemberInfo? ResolveInstance(Type start, string name)
+    {
+        var key = (start, name);
+        lock (Gate)
+        {
+            if (InstanceMembers.TryGetValue(key, out var cached))
+                return cached;
+        }
+
+        MemberInfo? found = null;
+        var t = start;
+        while (t != null && t != typeof(object))
+        {
+            if (TraceLookups)
+                PropertyLookups++;
+            var p = t.GetProperty(name, Declared);
+            if (p != null)
+            {
+                found = p;
+                break;
+            }
+
+            var f = t.GetField(name, Declared);
+            if (f != null)
+            {
+                found = f;
+                break;
+            }
+
+            t = t.BaseType;
+        }
+
+        lock (Gate)
+        {
+            InstanceMembers[key] = found;
+            return found;
+        }
+    }
+
+    static MemberInfo? ResolveStatic(Type t, string name)
+    {
+        var key = (t, name);
+        lock (Gate)
+        {
+            if (StaticMembers.TryGetValue(key, out var cached))
+                return cached;
+        }
+
+        if (TraceLookups)
+            PropertyLookups++;
+        MemberInfo? found = (MemberInfo?)t.GetProperty(name, AnyStatic) ?? t.GetField(name, AnyStatic);
+        lock (Gate)
+        {
+            StaticMembers[key] = found;
+            return found;
+        }
+    }
+
+    static MethodInfo? ResolveMethod(Type start, string name, int argc)
+    {
+        var key = (start, name, argc);
+        lock (Gate)
+        {
+            if (InstanceMethods.TryGetValue(key, out var cached))
+                return cached;
+        }
+
+        MethodInfo? found = null;
+        var t = start;
+        while (t != null && t != typeof(object))
+        {
+            if (TraceLookups)
+                MethodLookups++;
+            foreach (var cand in t.GetMethods(Declared))
+            {
+                if (cand.Name != name)
+                    continue;
+                if (cand.GetParameters().Length != argc)
+                    continue;
+                found = cand;
+                break;
+            }
+
+            if (found != null)
+                break;
+            t = t.BaseType;
+        }
+
+        lock (Gate)
+        {
+            InstanceMethods[key] = found;
+            return found;
+        }
+    }
+
     static void EnsureAssemblies()
     {
         if (_scanned)
@@ -508,5 +669,28 @@ static class UnityAccess
         }
 
         return null;
+    }
+
+    sealed class RequestCache
+    {
+        public readonly Dictionary<(string Type, string Member), object?> Singletons = new();
+        public readonly Dictionary<string, object[]> Objects = new(StringComparer.Ordinal);
+        public readonly Dictionary<string, object?> One = new(StringComparer.Ordinal);
+    }
+
+    sealed class ScopeReleaser : IDisposable
+    {
+        readonly RequestCache? _previous;
+        bool _disposed;
+
+        public ScopeReleaser(RequestCache? previous) => _previous = previous;
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            _request = _previous;
+        }
     }
 }
