@@ -89,6 +89,26 @@ public sealed class LoadoutDto
 {
     public List<string> AsString { get; set; } = new();
     public int PerkPointsRemaining { get; set; }
+    public List<LoadoutItemDto> Catalog { get; set; } = new();
+    public List<QuestDto> Quests { get; set; } = new();
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public int? Worth { get; set; }
+}
+
+public sealed class LoadoutItemDto
+{
+    public string Name { get; set; } = "";
+    public string Kind { get; set; } = "";
+    public bool Locked { get; set; }
+    public bool Unlocked { get; set; }
+    public string Description { get; set; } = "";
+}
+
+public sealed class QuestDto
+{
+    public string Statement { get; set; } = "";
+    public bool Complete { get; set; }
 }
 
 public sealed class SlotDto
