@@ -170,6 +170,63 @@ public sealed class NextWaveTests
         Assert.True(Json.Deserialize<StateDto>(res.Body)!.NextWave!.Available);
     }
 
+    [Fact]
+    public void IndexRallies_matches_ComputeRally_and_full_snapshot_for_same_spawnLine()
+    {
+        var castle = new WorldVec(0f, 0f, 0f);
+        const float offset = 3f;
+        var tonight = new WorldVec[] { new(20f, 0f, 0f), new(24f, 0f, 8f) };
+        var unused = new WorldVec[] { new(100f, 0f, 0f), new(110f, 0f, 0f) };
+        Func<WorldVec, float, bool> walls = (p, _) => p.X <= 20.1f;
+
+        var snapshot = NextWave.IndexRallies(
+            new (int, IReadOnlyList<WorldVec>)[] { (11, tonight), (22, unused) },
+            castle,
+            offset,
+            walls);
+        var indexed = NextWave.IndexRallies(
+            new (int, IReadOnlyList<WorldVec>)[] { (11, tonight) },
+            castle,
+            offset,
+            walls);
+        var compute = Spawns.ComputeRally(tonight, castle, offset, walls).Point.ToDto();
+
+        Assert.Single(indexed);
+        Assert.False(indexed.ContainsKey(22));
+        Assert.Equal(snapshot[11].X, indexed[11].X, 3);
+        Assert.Equal(snapshot[11].Y, indexed[11].Y, 3);
+        Assert.Equal(snapshot[11].Z, indexed[11].Z, 3);
+        Assert.Equal(compute.X, indexed[11].X, 3);
+        Assert.Equal(compute.Y, indexed[11].Y, 3);
+        Assert.Equal(compute.Z, indexed[11].Z, 3);
+        Assert.Equal(23f, indexed[11].X, 3);
+        Assert.Equal(0f, indexed[11].Z, 3);
+    }
+
+    [Fact]
+    public void IndexRallies_without_wall_matches_ComputeRally_closest_on_polyline()
+    {
+        var castle = new WorldVec(0f, 0f, 0f);
+        var line = new WorldVec[] { new(20f, 0f, 0f), new(24f, 0f, 8f) };
+        var indexed = NextWave.IndexRallies(
+            new (int, IReadOnlyList<WorldVec>)[] { (7, line) },
+            castle,
+            wallBackOffset: 3f);
+        var compute = Spawns.ComputeRally(line, castle, 3f).Point;
+
+        Assert.Equal(compute.X, indexed[7].X, 3);
+        Assert.Equal(compute.Y, indexed[7].Y, 3);
+        Assert.Equal(compute.Z, indexed[7].Z, 3);
+        Assert.Equal(20f, indexed[7].X, 3);
+        Assert.Equal(0f, indexed[7].Z, 3);
+    }
+
+    static NextWaveDto WithMouths(NextWaveDto dto)
+    {
+        dto.Mouths = NextWave.GroupByMouth(dto.Groups);
+        return dto;
+    }
+
     static void Fill(ObservationFakeWorld world)
     {
         world.Template = new StateDto
@@ -180,7 +237,7 @@ public sealed class NextWaveTests
             {
                 new() { Id = new EntityId { Kind = "spawn", Name = "Front Road" } }
             },
-            NextWave = new NextWaveDto
+            NextWave = WithMouths(new NextWaveDto
             {
                 Available = true,
                 WaveNumber = 2,
@@ -202,7 +259,7 @@ public sealed class NextWaveTests
                 {
                     new NextWaveEnemyDto { Name = "E Melee", Count = 8, MaxHp = 20 }
                 }
-            }
+            })
         };
     }
 }

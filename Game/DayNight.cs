@@ -50,23 +50,20 @@ public static class DayNight
         var generation = game.Ids.SceneGeneration;
         var phase = world.Phase ?? "";
 
-        if (world.SceneTransitionIsRunning || string.Equals(phase, "transition", StringComparison.OrdinalIgnoreCase))
+        var blocked = MutateGuard.Check(
+            world.SceneTransitionIsRunning
+                || string.Equals(phase, Phases.Transition, StringComparison.OrdinalIgnoreCase),
+            phase,
+            "scene transition in progress",
+            $"POST /night/call is illegal in phase={phase}",
+            Phases.Day);
+        if (blocked is { } gate)
         {
             return Fail(
-                409,
-                ErrorCodes.TransitionInProgress,
-                "scene transition in progress",
-                "transition",
-                generation);
-        }
-
-        if (!string.Equals(phase, "day", StringComparison.OrdinalIgnoreCase))
-        {
-            return Fail(
-                409,
-                ErrorCodes.IllegalPhase,
-                $"POST /night/call is illegal in phase={phase}",
-                phase,
+                gate.Status,
+                gate.Code,
+                gate.Message,
+                gate.Code == ErrorCodes.TransitionInProgress ? Phases.Transition : phase,
                 generation);
         }
 

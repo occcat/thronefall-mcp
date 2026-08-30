@@ -280,14 +280,18 @@ public sealed class Units
             {
                 foreach (var id in pick.Ids)
                 {
-                    if (!taken.Add(id))
-                        continue;
-                    var unit = World.ResolveUnit(id, World.Generation, out var error);
-                    if (error == ErrorCodes.StaleId)
-                        return (chosen, Fail(409, ErrorCodes.StaleId, $"stale unit id {id}"));
-                    if (unit == null)
-                        return (chosen, Fail(404, ErrorCodes.NotFound, $"unit {id} not found"));
-                    chosen.Add(unit);
+                    switch (ResolveById(id, taken, out var unit))
+                    {
+                        case IdResolve.Duplicate:
+                            continue;
+                        case IdResolve.Stale:
+                            return (chosen, Fail(409, ErrorCodes.StaleId, $"stale unit id {id}"));
+                        case IdResolve.Missing:
+                            return (chosen, Fail(404, ErrorCodes.NotFound, $"unit {id} not found"));
+                        default:
+                            chosen.Add(unit!);
+                            break;
+                    }
                 }
 
                 continue;
@@ -296,16 +300,7 @@ public sealed class Units
             if (string.IsNullOrEmpty(pick.TypeName))
                 return (chosen, Fail(400, ErrorCodes.NotFound, "each pick needs typeName or ids"));
 
-            var matches = new List<ICommandableUnit>();
-            foreach (var unit in World.PlayerUnits)
-            {
-                if (taken.Contains(unit.InstanceId))
-                    continue;
-                if (!TypeMatches(unit.TypeName, pick.TypeName))
-                    continue;
-                matches.Add(unit);
-            }
-
+            var matches = ResolveByType(pick.TypeName, group: null, taken);
             var need = pick.Count <= 0 ? matches.Count : pick.Count;
             if (need <= 0)
                 return (chosen, Fail(400, ErrorCodes.NotFound, $"pick count for {pick.TypeName} must be > 0"));
@@ -381,19 +376,15 @@ public sealed class Units
 
     UnitCommandOutcome? Gate(string action)
     {
-        if (World.TransitionInProgress)
-        {
-            return Fail(409, ErrorCodes.TransitionInProgress,
-                $"POST /units/{action} refused during scene transition");
-        }
-
-        var phase = (World.Phase ?? "").Trim().ToLowerInvariant();
-        if (phase is not "day" and not "night")
-        {
-            return Fail(409, ErrorCodes.IllegalPhase,
-                $"POST /units/{action} is illegal in phase={World.Phase}");
-        }
-
+        var blocked = MutateGuard.Check(
+            World.TransitionInProgress,
+            World.Phase,
+            $"POST /units/{action} refused during scene transition",
+            $"POST /units/{action} is illegal in phase={World.Phase}",
+            Phases.Day,
+            Phases.Night);
+        if (blocked is { } gate)
+            return Fail(gate.Status, gate.Code, gate.Message);
         return null;
     }
 
@@ -402,6 +393,47 @@ public sealed class Units
         public List<ICommandableUnit> Units { get; } = new();
         public List<int> StaleIds { get; } = new();
         public List<int> NotFound { get; } = new();
+    }
+
+    enum IdResolve
+    {
+        Found,
+        Duplicate,
+        Stale,
+        Missing
+    }
+
+    IdResolve ResolveById(int id, HashSet<int> taken, out ICommandableUnit? unit)
+    {
+        unit = null;
+        if (!taken.Add(id))
+            return IdResolve.Duplicate;
+
+        unit = World.ResolveUnit(id, World.Generation, out var error);
+        if (error == ErrorCodes.StaleId)
+            return IdResolve.Stale;
+        if (unit == null)
+            return IdResolve.Missing;
+        return IdResolve.Found;
+    }
+
+    List<ICommandableUnit> ResolveByType(string? typeName, int? group, HashSet<int>? exclude)
+    {
+        var matches = new List<ICommandableUnit>();
+        foreach (var unit in World.PlayerUnits)
+        {
+            if (exclude != null && exclude.Contains(unit.InstanceId))
+                continue;
+            if (!string.IsNullOrEmpty(typeName) && !TypeMatches(unit.TypeName, typeName))
+                continue;
+            if (group is int g && unit.ControlGroup != g)
+                continue;
+            if (string.IsNullOrEmpty(typeName) && group == null)
+                continue;
+            matches.Add(unit);
+        }
+
+        return matches;
     }
 
     Selection Select(UnitSelector selector)
@@ -413,31 +445,26 @@ public sealed class Units
             var seen = new HashSet<int>();
             foreach (var id in selector.Ids)
             {
-                if (!seen.Add(id))
-                    continue;
-                var unit = World.ResolveUnit(id, World.Generation, out var error);
-                if (error == ErrorCodes.StaleId)
-                    result.StaleIds.Add(id);
-                else if (unit == null)
-                    result.NotFound.Add(id);
-                else
-                    result.Units.Add(unit);
+                switch (ResolveById(id, seen, out var unit))
+                {
+                    case IdResolve.Duplicate:
+                        break;
+                    case IdResolve.Stale:
+                        result.StaleIds.Add(id);
+                        break;
+                    case IdResolve.Missing:
+                        result.NotFound.Add(id);
+                        break;
+                    default:
+                        result.Units.Add(unit!);
+                        break;
+                }
             }
 
             return result;
         }
 
-        foreach (var unit in World.PlayerUnits)
-        {
-            if (!string.IsNullOrEmpty(selector.TypeName) && !TypeMatches(unit.TypeName, selector.TypeName))
-                continue;
-            if (selector.Group is int g && unit.ControlGroup != g)
-                continue;
-            if (string.IsNullOrEmpty(selector.TypeName) && selector.Group == null)
-                continue;
-            result.Units.Add(unit);
-        }
-
+        result.Units.AddRange(ResolveByType(selector.TypeName, selector.Group, exclude: null));
         return result;
     }
 
@@ -498,36 +525,15 @@ public sealed class LiveUnitWorld : IUnitWorld
         {
             try
             {
-                if (TransitionInProgress)
-                    return "transition";
-
-                var stm = ReflectionCache.GetSceneTransition();
-                if (stm != null && ReflectionCache.CurrentSceneState != null)
-                {
-                    var state = ReflectionCache.CurrentSceneState.GetValue(stm, null);
-                    var name = state?.ToString() ?? "";
-                    if (name.IndexOf("MainMenu", StringComparison.OrdinalIgnoreCase) >= 0)
-                        return "menu";
-                    if (name.IndexOf("LevelSelect", StringComparison.OrdinalIgnoreCase) >= 0)
-                        return "level_select";
-                }
-
-                var dnc = ReflectionCache.GetDayNight();
-                if (dnc != null && ReflectionCache.CurrentTimestate != null)
-                {
-                    var ts = ReflectionCache.CurrentTimestate.GetValue(dnc, null)?.ToString() ?? "";
-                    if (ts.Equals("Night", StringComparison.OrdinalIgnoreCase))
-                        return "night";
-                    if (ts.Equals("Day", StringComparison.OrdinalIgnoreCase))
-                        return "day";
-                }
-
-                return ReflectionCache.GetTagManager() != null ? "day" : "unknown";
+                if (_facade?.World != null)
+                    return _facade.World.Phase ?? "unknown";
             }
             catch
             {
-                return "unknown";
+                // isolated tests without a live GameFacade world
             }
+
+            return "unknown";
         }
     }
 

@@ -59,13 +59,17 @@ public static class Paths
         var generation = game.Ids.SceneGeneration;
         var phase = world.Phase ?? "";
 
-        if (world.SceneTransitionIsRunning || string.Equals(phase, "transition", StringComparison.OrdinalIgnoreCase))
+        var transitioning = MutateGuard.Transition(
+            world.SceneTransitionIsRunning
+                || string.Equals(phase, Phases.Transition, StringComparison.OrdinalIgnoreCase),
+            "scene transition in progress");
+        if (transitioning is { } trans)
         {
             return Fail(
-                409,
-                ErrorCodes.TransitionInProgress,
-                "scene transition in progress",
-                "transition",
+                trans.Status,
+                trans.Code,
+                trans.Message,
+                Phases.Transition,
                 generation);
         }
 
@@ -92,36 +96,33 @@ public static class Paths
         }
 
         // Game field spelling is toogleOnlyAtDay.
-        if (cutter!.ToogleOnlyAtDay && !string.Equals(phase, "day", StringComparison.OrdinalIgnoreCase))
+        if (cutter!.ToogleOnlyAtDay)
         {
-            return Fail(
-                409,
-                ErrorCodes.IllegalPhase,
+            var dayOnly = MutateGuard.Phase(
+                phase,
                 $"POST /path/toggle is illegal in phase={phase} when toogleOnlyAtDay",
-                phase,
-                generation);
+                Phases.Day);
+            if (dayOnly is { } dayBlocked)
+                return Fail(dayBlocked.Status, dayBlocked.Code, dayBlocked.Message, phase, generation);
         }
 
-        if (cutter.ToggleOnlyAtNight && !string.Equals(phase, "night", StringComparison.OrdinalIgnoreCase))
+        if (cutter.ToggleOnlyAtNight)
         {
-            return Fail(
-                409,
-                ErrorCodes.IllegalPhase,
+            var nightOnly = MutateGuard.Phase(
+                phase,
                 $"POST /path/toggle is illegal in phase={phase} when toggleOnlyAtNight",
-                phase,
-                generation);
+                Phases.Night);
+            if (nightOnly is { } nightBlocked)
+                return Fail(nightBlocked.Status, nightBlocked.Code, nightBlocked.Message, phase, generation);
         }
 
-        if (!string.Equals(phase, "day", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(phase, "night", StringComparison.OrdinalIgnoreCase))
-        {
-            return Fail(
-                409,
-                ErrorCodes.IllegalPhase,
-                $"POST /path/toggle is illegal in phase={phase}",
-                phase,
-                generation);
-        }
+        var phaseGate = MutateGuard.Phase(
+            phase,
+            $"POST /path/toggle is illegal in phase={phase}",
+            Phases.Day,
+            Phases.Night);
+        if (phaseGate is { } illegal)
+            return Fail(illegal.Status, illegal.Code, illegal.Message, phase, generation);
 
         if (!cutter.ToggleSupported)
         {

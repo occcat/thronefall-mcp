@@ -31,7 +31,7 @@ public static class NextWave
             dto.WarningText = UnityAccess.String(wave, "warningText");
             dto.DifficultyMulti = UnityAccess.Float(wave, "difficultyMulti");
 
-            var rallies = IndexRallies(ids);
+            var rallies = new Dictionary<int, Vec3Dto>();
             var spawns = UnityAccess.Get(wave, "spawns") ?? UnityAccess.Get(wave, "Spawns");
             foreach (var spawn in UnityAccess.Enumerate(spawns))
             {
@@ -119,6 +119,33 @@ public static class NextWave
         return mouths;
     }
 
+    /// <summary>
+    /// Rally for tonight's spawn lines only. Same <see cref="Spawns.ComputeRally"/> as /state/spawns.
+    /// </summary>
+    public static Dictionary<int, Vec3Dto> IndexRallies(
+        IEnumerable<(int InstanceId, IReadOnlyList<WorldVec> Polyline)> lines,
+        WorldVec? castle,
+        float wallBackOffset,
+        Func<WorldVec, float, bool>? isWallNear = null)
+    {
+        var map = new Dictionary<int, Vec3Dto>();
+        if (lines == null)
+            return map;
+
+        foreach (var line in lines)
+        {
+            if (map.ContainsKey(line.InstanceId))
+                continue;
+            map[line.InstanceId] = Spawns.ComputeRally(
+                line.Polyline,
+                castle,
+                wallBackOffset,
+                isWallNear).Point.ToDto();
+        }
+
+        return map;
+    }
+
     static NextWaveDto Unavailable() => new()
     {
         Available = false,
@@ -126,19 +153,6 @@ public static class NextWave
         Enemies = new List<NextWaveEnemyDto>(),
         Mouths = new List<NextWaveMouthDto>()
     };
-
-    static Dictionary<int, Vec3Dto> IndexRallies(IdRegistry ids)
-    {
-        var map = new Dictionary<int, Vec3Dto>();
-        foreach (var line in Spawns.Snapshot(ids))
-        {
-            if (line?.Id == null)
-                continue;
-            map[line.Id.InstanceId] = line.SuggestedRally ?? new Vec3Dto();
-        }
-
-        return map;
-    }
 
     static NextWaveGroupDto ReadGroup(IdRegistry ids, object spawn, Dictionary<int, Vec3Dto> rallies)
     {
@@ -150,8 +164,13 @@ public static class NextWave
             var name = UnityAccess.NameOf(line);
             var iid = UnityAccess.InstanceId(line);
             spawnId = ids.Register(iid, "spawn", name, line);
-            if (rallies.TryGetValue(iid, out var suggested))
-                rally = suggested;
+            if (!rallies.TryGetValue(iid, out var cached))
+            {
+                cached = Observation.SuggestedRallyForLine(line);
+                rallies[iid] = cached;
+            }
+
+            rally = cached;
         }
         else
         {

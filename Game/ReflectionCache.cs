@@ -20,14 +20,9 @@ public static class ReflectionCache
     public static FieldInfo? CommandUnitsInstance { get; private set; }
     public static FieldInfo? PlayerUnitsCommanding { get; private set; }
     public static FieldInfo? PlayerUnitsCommandingBuffer { get; private set; }
-    public static FieldInfo? ToBePlaced { get; private set; }
     public static FieldInfo? Commanding { get; private set; }
     public static MethodInfo? PlaceCommandedUnits { get; private set; }
     public static MethodInfo? MakeUnitsInBufferHoldPosition { get; private set; }
-    public static MethodInfo? ForceCommandingEnd { get; private set; }
-    public static MethodInfo? AddUnitsToGroup { get; private set; }
-    public static MethodInfo? RemoveAllUnitsfromAllGroups { get; private set; }
-    public static MethodInfo? TryToSelectUnits { get; private set; }
     public static MethodInfo? OnUnitAdd { get; private set; }
 
     public static Type? PathfindMovementPlayerunitType { get; private set; }
@@ -233,14 +228,9 @@ public static class ReflectionCache
         CommandUnitsInstance = F(CommandUnitsType, "instance");
         PlayerUnitsCommanding = F(CommandUnitsType, "playerUnitsCommanding");
         PlayerUnitsCommandingBuffer = F(CommandUnitsType, "playerUnitsCommandingBuffer");
-        ToBePlaced = F(CommandUnitsType, "toBePlaced");
         Commanding = F(CommandUnitsType, "commanding");
         PlaceCommandedUnits = M(CommandUnitsType, "PlaceCommandedUnitsAndCalculateTargetPositions", 1);
         MakeUnitsInBufferHoldPosition = M(CommandUnitsType, "MakeUnitsInBufferHoldPosition", 0);
-        ForceCommandingEnd = M(CommandUnitsType, "ForceCommandingEnd", 0);
-        AddUnitsToGroup = M(CommandUnitsType, "AddUnitsToGroup", 1);
-        RemoveAllUnitsfromAllGroups = M(CommandUnitsType, "RemoveAllUnitsfromAllGroups", 0);
-        TryToSelectUnits = M(CommandUnitsType, "TryToSelectUnits", 1);
         OnUnitAdd = M(CommandUnitsType, "OnUnitAdd", 2);
 
         HomePosition = P(PathfindMovementPlayerunitType, "HomePosition");
@@ -293,8 +283,6 @@ public static class ReflectionCache
             Warn(logger, "PathfindMovementPlayerunit HomePosition/HoldPosition missing; unit fallback disabled");
         if (CommandUnitsType != null && !CommandUnitsReady)
             Warn(logger, "CommandUnits solver members missing; UseCommandUnitsSolver will fall back");
-        if (TryToSelectUnits == null && CommandUnitsType != null)
-            Warn(logger, "CommandUnits.TryToSelectUnits not found (unused; buffer is filled directly)");
     }
 
     static void BindSlots(object? logger)
