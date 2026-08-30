@@ -1,5 +1,7 @@
 using ThronefallControl.Dto;
+using ThronefallControl.Game;
 using ThronefallControl.Http;
+using ThronefallControl.Http.Modules;
 using Xunit;
 
 namespace ThronefallControl.Tests;
@@ -18,6 +20,69 @@ public sealed class RouterTests
         Assert.Equal("ThronefallControl", body.Plugin);
         Assert.Equal(PluginInfo.Version, body.Version);
         Assert.False(body.CheatsEnabled);
+        Assert.False(body.Ready);
+    }
+
+    [Fact]
+    public void Health_alive_does_not_enqueue_main_thread()
+    {
+        var previous = MainThread.Current;
+        var mt = new MainThread(TimeSpan.FromSeconds(2));
+        MainThread.Current = mt;
+        try
+        {
+            var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/health"));
+            Assert.Equal(200, res.Status);
+            Assert.Equal(0, mt.QueueDepth);
+        }
+        finally
+        {
+            MainThread.Current = previous;
+        }
+    }
+
+    [Fact]
+    public async Task Health_ready_reads_frame_on_main_thread()
+    {
+        var previousMt = MainThread.Current;
+        var previousReader = HealthModule.FrameCountReader;
+        var mt = new MainThread(TimeSpan.FromSeconds(2));
+        MainThread.Current = mt;
+        HealthModule.FrameCountReader = () => 17;
+        using var cts = new CancellationTokenSource();
+        var pump = Task.Run(async () =>
+        {
+            while (!cts.IsCancellationRequested)
+            {
+                mt.Pump();
+                try
+                {
+                    await Task.Delay(5, cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
+        });
+
+        try
+        {
+            var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/health/ready"));
+            Assert.Equal(200, res.Status);
+            var body = Json.Deserialize<HealthResponse>(res.Body);
+            Assert.NotNull(body);
+            Assert.True(body!.Ok);
+            Assert.True(body.Ready);
+            Assert.Equal(17, body.FrameCount);
+        }
+        finally
+        {
+            cts.Cancel();
+            try { await pump; } catch (OperationCanceledException) { }
+            MainThread.Current = previousMt;
+            HealthModule.FrameCountReader = previousReader;
+        }
     }
 
     [Fact]
