@@ -130,6 +130,26 @@ public sealed class LiveSlotBackend : ISlotBackend
         return Snapshot(slot);
     }
 
+    public bool CancelActiveChoice(out string? error)
+    {
+        error = null;
+        if (ReflectionCache.CancelChoice == null)
+        {
+            error = ErrorCodes.UnsupportedInThisBuild;
+            return false;
+        }
+
+        var manager = ChoiceMgr();
+        if (manager == null)
+        {
+            error = ErrorCodes.NotFound;
+            return false;
+        }
+
+        ReflectionCache.CancelChoice.Invoke(manager, null);
+        return true;
+    }
+
     public SlotSnapshot Refresh(int instanceId)
     {
         var slot = LiveSlot(instanceId);

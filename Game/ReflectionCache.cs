@@ -100,6 +100,7 @@ public static class ReflectionCache
     public static MethodInfo? TryToBuildOrUpgradeAndPay { get; private set; }
     public static MethodInfo? ExecuteBuildOrUpgrade { get; private set; }
     public static MethodInfo? OnUpgradeChoiceComplete { get; private set; }
+    public static MethodInfo? CancelChoice { get; private set; }
     public static MethodInfo? Harvest { get; private set; }
     public static MethodInfo? MarkAsHarvested { get; private set; }
     public static MethodInfo? SpendCoins { get; private set; }
@@ -307,6 +308,7 @@ public static class ReflectionCache
         TryToBuildOrUpgradeAndPay = M(BuildSlot, "TryToBuildOrUpgradeAndPay", -1);
         ExecuteBuildOrUpgrade = M(BuildSlot, "ExecuteBuildOrUpgrade", -1);
         OnUpgradeChoiceComplete = M(BuildSlot, "OnUpgradeChoiceComplete", -1);
+        CancelChoice = M(ChoiceManager, "CancelChoice", 0);
         Harvest = M(BuildingInteractor, "Harvest", -1);
         MarkAsHarvested = M(BuildingInteractor, "MarkAsHarvested", -1);
         SpendCoins = M(PlayerInteraction, "SpendCoins", -1);

@@ -98,6 +98,7 @@ public static class OpenApi
             ["/slots/{id}/build"] = Post("BuildSlot", "TryToBuildOrUpgradeAndPay. Legal in day."),
             ["/slots/{id}/upgrade"] = Post("UpgradeSlot", "Alias of build. Legal in day."),
             ["/slots/{id}/choice"] = Post("ChooseUpgrade", "Complete an upgrade branch. Legal in day."),
+            ["/slots/choice/cancel"] = Post("CancelUpgradeChoice", "Cancel the in-progress upgrade choice via ChoiceManager.CancelChoice. Legal in day."),
             ["/night/call"] = Post("CallNight", "SwitchToNight when IsFreeToCallNight. Legal in day. Does not skip waves."),
             ["/night/policy"] = Post("SetNightPolicy", "Set and immediately run a night policy. human: no combat. afk_castle: teleport king to castle. scripted_posts: intent-only until the units worker owns dispatch — this call does not post units. Legal in day/night."),
             ["/units/command"] = Post("CommandUnits", "Send units to a world point. Legal in day/night."),

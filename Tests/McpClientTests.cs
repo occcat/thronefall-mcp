@@ -17,6 +17,7 @@ public sealed class McpClientTests
         "thronefall_state",
         "thronefall_harvest",
         "thronefall_slot_upgrade",
+        "thronefall_slot_choice_cancel",
         "thronefall_night_call",
         "thronefall_units_command",
         "thronefall_units_send_to_spawn",

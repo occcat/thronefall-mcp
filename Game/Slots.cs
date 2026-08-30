@@ -20,6 +20,7 @@ public interface ISlotBackend
     SlotSnapshot Harvest(SlotSnapshot slot);
     SlotSnapshot BuildOrUpgrade(SlotSnapshot slot, bool teleportKingNearby);
     SlotSnapshot CompleteChoice(SlotSnapshot slot, string choiceName, out string? error);
+    bool CancelActiveChoice(out string? error);
     SlotSnapshot Refresh(int instanceId);
     void PumpChoiceWait();
 }
@@ -358,6 +359,73 @@ public static class Slots
         return result;
     }
 
+    public static SlotCommandResult CancelChoice(ISlotBackend backend, bool dryRun)
+    {
+        if (!TryBeginMutate(backend, "/slots/choice/cancel", out var fail))
+            return fail!;
+
+        var phase = backend.Phase;
+        var gen = backend.Generation;
+        if (!HasCancelableChoice(backend))
+        {
+            return SlotCommandResult.Fail(
+                409,
+                ErrorCodes.NotFound,
+                "there is no upgrade choice to cancel",
+                phase,
+                gen);
+        }
+
+        if (dryRun)
+        {
+            return SlotCommandResult.Success(new DryRunResponse
+            {
+                Ok = true,
+                DryRun = true,
+                Would = new DryRunWouldDto
+                {
+                    Action = "cancel",
+                    Cost = 0,
+                    BalanceAfter = backend.Balance,
+                    Blocked = false
+                }
+            }, gen, phase, dryRun: true);
+        }
+
+        if (!backend.CancelActiveChoice(out var error))
+        {
+            return SlotCommandResult.Fail(
+                409,
+                error ?? ErrorCodes.NotFound,
+                error == ErrorCodes.UnsupportedInThisBuild
+                    ? "ChoiceManager.CancelChoice is not available in this process"
+                    : "there is no upgrade choice to cancel",
+                phase,
+                gen);
+        }
+
+        return SlotCommandResult.Success(new CancelChoiceResponse
+        {
+            Ok = true,
+            Canceled = true,
+            Phase = phase,
+            Generation = gen
+        }, gen, phase);
+    }
+
+    static bool HasCancelableChoice(ISlotBackend backend)
+    {
+        if (backend.ChoiceBusy)
+            return true;
+        foreach (var slot in backend.List())
+        {
+            if (slot.IsWaitingForChoice || slot.ChoiceCoroutineRunning)
+                return true;
+        }
+
+        return false;
+    }
+
     static bool TryBeginMutate(ISlotBackend backend, string path, out SlotCommandResult? fail)
     {
         fail = null;
@@ -457,6 +525,7 @@ public sealed class MemorySlotBackend : ISlotBackend
     public int Balance { get; set; }
     public int EnergyCoreBalance { get; set; }
     public bool IsReady { get; set; } = true;
+    public int CancelActiveChoiceCalls { get; private set; }
     public bool ChoiceBusy
     {
         get
@@ -584,6 +653,32 @@ public sealed class MemorySlotBackend : ISlotBackend
         slot.CanBeUpgraded = slot.RemainUpgradableAfterBuild;
         slot.ChoiceDelayRemaining = 0;
         return Snapshot(slot);
+    }
+
+    public bool CancelActiveChoice(out string? error)
+    {
+        CancelActiveChoiceCalls++;
+        error = null;
+        var canceled = false;
+        foreach (var slot in _slots.Values)
+        {
+            if (!slot.IsWaitingForChoice && !slot.ChoiceCoroutineRunning && !slot.PendingChoice)
+                continue;
+
+            slot.PendingChoice = false;
+            slot.IsWaitingForChoice = false;
+            slot.ChoiceCoroutineRunning = false;
+            slot.ChoiceDelayRemaining = 0;
+            canceled = true;
+        }
+
+        if (!canceled)
+        {
+            error = ErrorCodes.NotFound;
+            return false;
+        }
+
+        return true;
     }
 
     public SlotSnapshot Refresh(int instanceId)
