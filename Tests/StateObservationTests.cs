@@ -289,6 +289,7 @@ public sealed class StateObservationTests
             dto.Units = Template.Units;
             dto.Enemies = Template.Enemies;
             dto.Spawns = Template.Spawns;
+            dto.NextWave = Template.NextWave;
             dto.Cutters = Template.Cutters;
             _ = include;
             _ = facade;
