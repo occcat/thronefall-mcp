@@ -7,6 +7,7 @@ public static class ReflectionCache
 {
     const BindingFlags Any =
         BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+    const BindingFlags InstanceAny = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
     public static bool Initialized { get; private set; }
     public static bool PathfindReady { get; private set; }
@@ -59,11 +60,15 @@ public static class ReflectionCache
     public static FieldInfo? SceneTransitionManagerInstance { get; private set; }
     public static PropertyInfo? SceneTransitionIsRunning { get; private set; }
     public static PropertyInfo? CurrentSceneState { get; private set; }
+    public static MethodInfo? IsInLevelSelect { get; private set; }
 
     public static Type? DayNightCycleType { get; private set; }
     public static Type? TimestateType { get; private set; }
     public static PropertyInfo? DayNightCycleInstance { get; private set; }
     public static PropertyInfo? CurrentTimestate { get; private set; }
+    public static PropertyInfo? DayNightCycleCurrentTimestate => CurrentTimestate;
+    public static MethodInfo? DayNightCycleSwitchToNight { get; private set; }
+    public static PropertyInfo? DayNightCycleCoinCountToBeHarvested { get; private set; }
 
     public static Type? Vector3Type { get; private set; }
     public static Type? TransformType { get; private set; }
@@ -98,6 +103,10 @@ public static class ReflectionCache
     public static MethodInfo? Harvest { get; private set; }
     public static MethodInfo? MarkAsHarvested { get; private set; }
     public static MethodInfo? SpendCoins { get; private set; }
+    public static MethodInfo? PlayerInteractionSpendCoins => SpendCoins;
+    public static PropertyInfo? PlayerInteractionBalance => Balance;
+    public static Type? PlayerInteractionType => PlayerInteraction;
+    public static PropertyInfo? PlayerInteractionIsFreeToCallNight { get; private set; }
     public static MethodInfo? SpendEnergyCores { get; private set; }
     public static MethodInfo? TeleportTo { get; private set; }
     public static MethodInfo? GetInstanceId { get; private set; }
@@ -141,6 +150,18 @@ public static class ReflectionCache
     public static FieldInfo? UpgradeBranches { get; private set; }
     public static FieldInfo? ChoiceDetails { get; private set; }
 
+    public static Type? CutOpenPathInteractorType { get; private set; }
+    public static MethodInfo? ToggleCutPath { get; private set; }
+    public static MethodInfo? IsToggleValidToUse { get; private set; }
+    public static MethodInfo? ToggleComplete { get; private set; }
+    public static FieldInfo? PathOpened { get; private set; }
+    public static FieldInfo? ToggleCost { get; private set; }
+    public static FieldInfo? ToogleOnlyAtDay { get; private set; }
+    public static FieldInfo? ToggleOnlyAtNight { get; private set; }
+    public static FieldInfo? PathStateChanged { get; private set; }
+    public static PropertyInfo? CanBeInteractedWith { get; private set; }
+    public static bool CutOpenPathToggleBound => ToggleCutPath != null;
+
     public static void TryInit(object? logger = null)
     {
         try
@@ -176,6 +197,15 @@ public static class ReflectionCache
         {
             SlotsReady = false;
             Warn(logger, "slot reflection init failed: " + ex.Message);
+        }
+
+        try
+        {
+            BindPaths(logger);
+        }
+        catch (Exception ex)
+        {
+            Warn(logger, "path reflection init failed: " + ex.Message);
         }
 
         Initialized = true;
@@ -236,9 +266,12 @@ public static class ReflectionCache
         SceneTransitionIsRunning = P(SceneTransitionManagerType, "SceneTransitionIsRunning");
         CurrentSceneState = P(SceneTransitionManagerType, "CurrentSceneState")
                             ?? P(SceneTransitionManagerType, "SceneState");
+        IsInLevelSelect = M(SceneTransitionManagerType, "IsInLevelSelect", 0);
 
         DayNightCycleInstance = P(DayNightCycleType, "Instance") ?? P(DayNightCycleType, "instance");
         CurrentTimestate = P(DayNightCycleType, "CurrentTimestate");
+        DayNightCycleSwitchToNight = M(DayNightCycleType, "SwitchToNight", 0);
+        DayNightCycleCoinCountToBeHarvested = P(DayNightCycleType, "CoinCountToBeHarvested");
 
         ETagCastleCenter = EnumInt(ETagType, "CastleCenter", 4);
         ETagWall = EnumInt(ETagType, "Wall", 13);
@@ -295,6 +328,7 @@ public static class ReflectionCache
         IsWaitingForChoice = P(BuildingInteractor, "IsWaitingForChoice");
         KnockedOutTonight = P(BuildingInteractor, "KnockedOutTonight");
         Balance = P(PlayerInteraction, "Balance");
+        PlayerInteractionIsFreeToCallNight = P(PlayerInteraction, "IsFreeToCallNight");
         EnergyCoreBalance = P(PlayerInteraction, "EnergyCoreBalance");
         TrueBalance = P(PlayerInteraction, "TrueBalance");
         Transform = P(BuildSlot, "transform") ?? P(ComponentType, "transform");
@@ -332,6 +366,23 @@ public static class ReflectionCache
             Warn(logger, "slot commands will return unsupported_in_this_build until game types load");
     }
 
+    static void BindPaths(object? logger)
+    {
+        CutOpenPathInteractorType = FindType("CutOpenPathInteractor");
+        ToggleCutPath = M(CutOpenPathInteractorType, "ToggleCutPath", 0);
+        IsToggleValidToUse = M(CutOpenPathInteractorType, "IsToggleValidToUse", 0);
+        ToggleComplete = M(CutOpenPathInteractorType, "ToggleComplete", 0);
+        PathOpened = F(CutOpenPathInteractorType, "pathOpened");
+        ToggleCost = F(CutOpenPathInteractorType, "toggleCost");
+        ToogleOnlyAtDay = F(CutOpenPathInteractorType, "toogleOnlyAtDay");
+        ToggleOnlyAtNight = F(CutOpenPathInteractorType, "toggleOnlyAtNight");
+        PathStateChanged = F(CutOpenPathInteractorType, "pathStateChanged");
+        CanBeInteractedWith = P(CutOpenPathInteractorType, "CanBeInteractedWith");
+
+        if (CutOpenPathInteractorType != null && ToggleCutPath == null && ToggleComplete == null)
+            Warn(logger, "CutOpenPathInteractor toggle methods missing; POST /path/toggle unsupported");
+    }
+
     public static object? GetStatic(FieldInfo? field) => field == null ? null : field.GetValue(null);
 
     public static object? GetStatic(PropertyInfo? prop) =>
@@ -343,7 +394,215 @@ public static class ReflectionCache
 
     public static object? GetDayNight() => GetStatic(DayNightCycleInstance);
 
+    public static object? GetDayNightCycle() => GetDayNight();
+
     public static object? GetSceneTransition() => GetStatic(SceneTransitionManagerInstance);
+
+    public static object? GetSceneTransitionManager() => GetSceneTransition();
+
+    public static object? GetPlayerInteraction() => GetStatic(PlayerInteractionInstance);
+
+    public static object[] FindCutters()
+    {
+        if (CutOpenPathInteractorType == null)
+            return Array.Empty<object>();
+        return FindObjectsOfType(CutOpenPathInteractorType);
+    }
+
+    public static object[] FindObjectsOfType(Type type)
+    {
+        if (UnityObjectType == null || type == null)
+            return Array.Empty<object>();
+
+        foreach (var method in UnityObjectType.GetMethods(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (method.Name != "FindObjectsOfType" || method.IsGenericMethod)
+                continue;
+            var ps = method.GetParameters();
+            object? raw = null;
+            try
+            {
+                if (ps.Length == 1 && ps[0].ParameterType == typeof(Type))
+                    raw = method.Invoke(null, new object[] { type });
+                else if (ps.Length == 2 && ps[0].ParameterType == typeof(Type) && ps[1].ParameterType == typeof(bool))
+                    raw = method.Invoke(null, new object[] { type, true });
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (raw is Array arr)
+            {
+                var list = new object[arr.Length];
+                arr.CopyTo(list, 0);
+                return list;
+            }
+        }
+
+        return Array.Empty<object>();
+    }
+
+    public static int GetGameObjectInstanceId(object obj)
+    {
+        if (obj == null)
+            return 0;
+        var go = obj.GetType().GetProperty("gameObject", InstanceAny)?.GetValue(obj) ?? obj;
+        var method = go.GetType().GetMethod("GetInstanceID", Type.EmptyTypes);
+        if (method?.Invoke(go, null) is int id)
+            return id;
+        return 0;
+    }
+
+    public static string GetObjectName(object obj)
+    {
+        if (obj == null)
+            return "";
+        var go = obj.GetType().GetProperty("gameObject", InstanceAny)?.GetValue(obj) ?? obj;
+        if (go.GetType().GetProperty("name", InstanceAny)?.GetValue(go) is string name)
+            return name;
+        return obj.GetType().Name;
+    }
+
+    public static bool ReadBool(PropertyInfo? prop, object target, bool fallback = false)
+    {
+        if (prop == null || target == null)
+            return fallback;
+        try
+        {
+            return prop.GetValue(target) is bool b && b;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    public static bool ReadBool(FieldInfo? field, object target, bool fallback = false)
+    {
+        if (field == null || target == null)
+            return fallback;
+        try
+        {
+            return field.GetValue(target) is bool b && b;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    public static int ReadInt(PropertyInfo? prop, object target, int fallback = 0)
+    {
+        if (prop == null || target == null)
+            return fallback;
+        try
+        {
+            return ToInt(prop.GetValue(target), fallback);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    public static int ReadInt(FieldInfo? field, object target, int fallback = 0)
+    {
+        if (field == null || target == null)
+            return fallback;
+        try
+        {
+            return ToInt(field.GetValue(target), fallback);
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    public static string ReadName(PropertyInfo? prop, object target)
+    {
+        if (prop == null || target == null)
+            return "";
+        try
+        {
+            var value = prop.GetValue(target);
+            return value?.ToString() ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    public static bool InvokeBool(MethodInfo? method, object target, bool fallback = false)
+    {
+        if (method == null || target == null)
+            return fallback;
+        try
+        {
+            return method.Invoke(target, null) is bool b && b;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    public static void Invoke(MethodInfo? method, object target, params object[] args)
+    {
+        method?.Invoke(target, args == null || args.Length == 0 ? null : args);
+    }
+
+    public static void InvokeBoolCallback(object? callback, bool value)
+    {
+        if (callback == null)
+            return;
+        foreach (var method in callback.GetType().GetMethods(InstanceAny))
+        {
+            if (method.Name != "Invoke")
+                continue;
+            var ps = method.GetParameters();
+            if (ps.Length == 1)
+            {
+                object arg = value;
+                if (ps[0].ParameterType != typeof(bool))
+                    arg = Convert.ChangeType(value, ps[0].ParameterType);
+                method.Invoke(callback, new[] { arg });
+                return;
+            }
+
+            if (ps.Length == 0)
+            {
+                method.Invoke(callback, null);
+                return;
+            }
+        }
+    }
+
+    static int ToInt(object? value, int fallback)
+    {
+        switch (value)
+        {
+            case int i:
+                return i;
+            case float f:
+                return (int)f;
+            case double d:
+                return (int)d;
+            case null:
+                return fallback;
+            default:
+                try
+                {
+                    return Convert.ToInt32(value);
+                }
+                catch
+                {
+                    return fallback;
+                }
+        }
+    }
 
     public static object? ToVector3(WorldVec v)
     {

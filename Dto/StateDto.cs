@@ -237,7 +237,38 @@ public sealed class DryRunWouldDto
 {
     public string Action { get; set; } = "";
     public string? Slot { get; set; }
+    public string? Cutter { get; set; }
     public int Cost { get; set; }
     public int BalanceAfter { get; set; }
     public bool Blocked { get; set; }
+}
+
+public sealed class CallNightRequest
+{
+    public string? ClientRequestId { get; set; }
+    public bool DryRun { get; set; }
+}
+
+public sealed class CallNightResponse
+{
+    public bool Ok { get; set; } = true;
+    public bool Called { get; set; }
+    public string Phase { get; set; } = "";
+    public int Generation { get; set; }
+}
+
+public sealed class TogglePathRequest
+{
+    public string? ClientRequestId { get; set; }
+    public bool DryRun { get; set; }
+    public EntityId? Id { get; set; }
+}
+
+public sealed class TogglePathResponse
+{
+    public bool Ok { get; set; } = true;
+    public bool PathOpened { get; set; }
+    public int ToggleCost { get; set; }
+    public int Generation { get; set; }
+    public EntityId? Id { get; set; }
 }
