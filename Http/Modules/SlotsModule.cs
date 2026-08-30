@@ -28,6 +28,8 @@ public sealed class SlotsModule : IRouteModule
     public void Register(Router router)
     {
         router.Map("POST", "/harvest", Harvest);
+        router.Map("POST", "/slots/{id}/build", ctx => BuildOrUpgrade(ctx, "build"));
+        router.Map("POST", "/slots/{id}/upgrade", ctx => BuildOrUpgrade(ctx, "upgrade"));
     }
 
     HttpResponse Harvest(RequestContext ctx)

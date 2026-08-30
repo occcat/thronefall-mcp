@@ -17,6 +17,7 @@ public static class PluginConfig
     public static int MaxWorkItemsPerFrame { get; set; } = 8;
 
     public static string DefaultNightPolicy { get; set; } = "human";
+    public static bool TeleportKingNearbyOnSlotAction { get; set; }
 
     public static void Bind(object? config = null)
     {
