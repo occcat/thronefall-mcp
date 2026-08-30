@@ -52,6 +52,11 @@ public sealed class NextWaveTests
         Assert.Equal(2, dto.NextWave.WaveNumber);
         Assert.Single(dto.NextWave.Groups);
         Assert.Equal("spawn", dto.NextWave.Groups[0].Spawn.Kind);
+        Assert.Contains("\"mouths\":", res.Body);
+        Assert.Single(dto.NextWave.Mouths);
+        Assert.Equal("High Back Road", dto.NextWave.Mouths[0].Spawn.Name);
+        Assert.Equal("E Melee", dto.NextWave.Mouths[0].Enemies[0].Name);
+        Assert.Equal(8, dto.NextWave.Mouths[0].Enemies[0].Count);
     }
 
     [Fact]
@@ -68,6 +73,8 @@ public sealed class NextWaveTests
         Assert.False(dto.NextWave!.Available);
         Assert.Empty(dto.NextWave.Groups);
         Assert.Empty(dto.NextWave.Enemies);
+        Assert.Empty(dto.NextWave.Mouths);
+        Assert.Contains("\"mouths\":", res.Body);
         Assert.DoesNotContain("Front Road", res.Body);
     }
 
@@ -104,6 +111,41 @@ public sealed class NextWaveTests
         Assert.False(dto.Available);
         Assert.Empty(dto.Groups);
         Assert.Empty(dto.Enemies);
+        Assert.Empty(dto.Mouths);
+    }
+
+    [Fact]
+    public void GroupByMouth_merges_two_types_on_same_spawn()
+    {
+        var spawn = new EntityId { InstanceId = 88, Generation = 1, Kind = "spawn", Name = "High Back Road" };
+        var mouths = NextWave.GroupByMouth(new[]
+        {
+            new NextWaveGroupDto { Spawn = spawn, EnemyName = "E Melee", Count = 8, SuggestedRally = new Vec3Dto { X = 1 } },
+            new NextWaveGroupDto { Spawn = spawn, EnemyName = "E Archer", Count = 3, SuggestedRally = new Vec3Dto { X = 1 } }
+        });
+        Assert.Single(mouths);
+        Assert.Equal(88, mouths[0].Spawn.InstanceId);
+        Assert.Equal(2, mouths[0].Enemies.Count);
+        Assert.Equal("E Melee", mouths[0].Enemies[0].Name);
+        Assert.Equal(8, mouths[0].Enemies[0].Count);
+        Assert.Equal("E Archer", mouths[0].Enemies[1].Name);
+        Assert.Equal(3, mouths[0].Enemies[1].Count);
+    }
+
+    [Fact]
+    public void GroupByMouth_adds_count_for_same_name_and_elite()
+    {
+        var spawn = new EntityId { InstanceId = 7, Kind = "spawn", Name = "Front Road" };
+        var mouths = NextWave.GroupByMouth(new[]
+        {
+            new NextWaveGroupDto { Spawn = spawn, EnemyName = "E Melee", Elite = true, Count = 2, GoldCoins = 1 },
+            new NextWaveGroupDto { Spawn = spawn, EnemyName = "E Melee", Elite = true, Count = 5, GoldCoins = 9 }
+        });
+        Assert.Single(mouths);
+        Assert.Single(mouths[0].Enemies);
+        Assert.Equal(7, mouths[0].Enemies[0].Count);
+        Assert.True(mouths[0].Enemies[0].Elite);
+        Assert.Equal(1, mouths[0].Enemies[0].GoldCoins);
     }
 
     [Fact]
