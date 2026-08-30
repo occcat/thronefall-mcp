@@ -70,16 +70,6 @@ public static class DayNight
                 generation);
         }
 
-        if (!world.IsFreeToCallNight)
-        {
-            return Fail(
-                409,
-                ErrorCodes.IllegalPhase,
-                "POST /night/call requires IsFreeToCallNight",
-                phase,
-                generation);
-        }
-
         if (!world.SwitchToNightSupported)
         {
             return Fail(

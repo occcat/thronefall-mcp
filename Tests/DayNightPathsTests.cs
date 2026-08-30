@@ -34,18 +34,17 @@ public sealed class DayNightPathsTests
     }
 
     [Fact]
-    public void Refuse_night_when_not_free()
+    public void Call_night_when_not_free()
     {
         using var session = Session.Day(free: false);
         var res = session.Dispatch("POST", "/night/call", "{\"clientRequestId\":\"n-1\"}");
-        Assert.Equal(409, res.Status);
-        var err = Json.Deserialize<ErrorResponse>(res.Body);
-        Assert.NotNull(err);
-        Assert.False(err!.Ok);
-        Assert.Equal(ErrorCodes.IllegalPhase, err.Error);
-        Assert.Equal("day", err.Phase);
-        Assert.Contains("IsFreeToCallNight", err.Message);
-        Assert.Equal(0, session.World.SwitchToNightCalls);
+        Assert.Equal(200, res.Status);
+        var body = Json.Deserialize<CallNightResponse>(res.Body);
+        Assert.NotNull(body);
+        Assert.True(body!.Ok);
+        Assert.True(body.Called);
+        Assert.Equal("night", body.Phase);
+        Assert.Equal(1, session.World.SwitchToNightCalls);
     }
 
     [Fact]

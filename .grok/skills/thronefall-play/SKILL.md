@@ -15,7 +15,7 @@ description: 通过已发布的 HTTP / MCP 代操 Thronefall。开局读 loadout
 
 - **不要瞬移国王。** 不调 `thronefall_king_teleport` / `/king/teleport`，不用 `afk_castle`，建造不带 `teleportKingNearby`。收税用 `thronefall_harvest`。
 - **小兵不要固守。** `/units/command` 与 `/units/send-to-spawn` 一律 `"hold": false`。不要 `/units/hold`，不要 `/units/follow` 把整队绑到国王。
-- 用户点头后立刻 `thronefall_night_call`。不要让用户去点游戏召夜。若 409，读 `economy.isFreeToCallNight` 回报，不要自己传国王。
+- 用户点头后立刻 `thronefall_night_call`。不要让用户去点游戏召夜。白天即可召，不再要求 `isFreeToCallNight`。不要自己传国王。
 
 ## MCP 工具（已发布）
 

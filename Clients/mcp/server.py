@@ -313,7 +313,7 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "thronefall_night_call",
-        "description": "POST /night/call. Switch to night when IsFreeToCallNight.",
+        "description": "POST /night/call. Switch to night in day. Does not require IsFreeToCallNight.",
         "inputSchema": {
             "type": "object",
             "properties": {
