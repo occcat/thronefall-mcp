@@ -23,7 +23,8 @@ public sealed class Plugin : BaseUnityPlugin
         {
             PluginConfig.Bind(Config);
             ReflectionCache.TryInit(Logger);
-            GameFacade.Current ??= new GameFacade();
+            var facade = GameFacade.Current ??= new GameFacade();
+            Units.Current = facade.Units;
             _mainThread = MainThread.Current ?? new MainThread();
             MainThread.Current = _mainThread;
             HealthModule.FrameCountReader = ReadFrameCount;

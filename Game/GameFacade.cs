@@ -14,7 +14,11 @@ public sealed class GameFacade
 
     public GameFacade() : this(new LiveWorld()) { }
 
-    public GameFacade(IWorld world)
+    public GameFacade(IWorld world) : this(world, null) { }
+
+    public GameFacade(IUnitWorld unitWorld) : this(null, unitWorld) { }
+
+    GameFacade(IWorld? world, IUnitWorld? unitWorld)
     {
         _world = world ?? new LiveWorld();
         Ids = new IdRegistry();
@@ -22,9 +26,11 @@ public sealed class GameFacade
         NightPolicy = string.IsNullOrEmpty(PluginConfig.DefaultNightPolicy)
             ? NightPolicies.Human
             : PluginConfig.DefaultNightPolicy;
+        Units = new Units(unitWorld ?? new LiveUnitWorld(this));
     }
 
     public IdRegistry Ids { get; }
+    public Units Units { get; }
     public string Phase { get; private set; }
     public string Scene { get; private set; } = "";
     public string NightPolicy { get; set; }
@@ -101,6 +107,14 @@ public sealed class GameFacade
 
         dto = GetState(slice);
         return true;
+    }
+
+    public static GameFacade CreateLive()
+    {
+        var facade = new GameFacade();
+        Current = facade;
+        Units.Current = facade.Units;
+        return facade;
     }
 
     StateDto NewCore() => new()
