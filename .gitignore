@@ -1,0 +1,81 @@
+# Worktrees used for parallel agents
+.worktree/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.user
+*.userprefs
+*.suo
+*.sln.docstates
+
+# .NET / BepInEx plugin build
+bin/
+obj/
+[Bb]uild/
+[Ll]og/
+[Ll]ogs/
+*.dll
+*.pdb
+*.mdb
+*.exe
+*.cache
+project.lock.json
+artifacts/
+TestResults/
+*.nupkg
+
+# Keep checked-in third-party binaries explicitly if needed
+!lib/**/*.dll
+
+# Unity / game droppings if people copy game files here
+*.app/
+Library/
+Temp/
+Obj/
+Logs/
+MemoryCaptures/
+Recordings/
+
+# Python MCP helper
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/
+
+# Node (if an MCP stdio wrapper is added)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Game saves / local player data accidentally copied in
+ThroneSave*.sav
+steam_autocloud.vdf
+Player.log
+Player-prev.log
