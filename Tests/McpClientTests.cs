@@ -6,6 +6,7 @@ using ThronefallControl.Config;
 using ThronefallControl.Dto;
 using ThronefallControl.Game;
 using ThronefallControl.Http;
+using ThronefallControl.Tests.Fakes;
 using Xunit;
 
 namespace ThronefallControl.Tests;
@@ -118,7 +119,7 @@ public sealed class McpClientTests
     [Fact]
     public void Next_wave_tool_surfaces_mouths_and_counts()
     {
-        var world = new FakeNextWaveWorld
+        var world = new ObservationFakeWorld
         {
             HintsValue = new WorldHints
             {
@@ -187,21 +188,6 @@ public sealed class McpClientTests
         finally
         {
             GameFacade.Current = previous;
-        }
-    }
-
-    sealed class FakeNextWaveWorld : IWorld
-    {
-        public WorldHints HintsValue { get; set; } = new();
-        public StateDto Template { get; set; } = new();
-
-        public WorldHints Hints() => HintsValue;
-
-        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
-        {
-            dto.NextWave = Template.NextWave;
-            _ = include;
-            _ = facade;
         }
     }
 

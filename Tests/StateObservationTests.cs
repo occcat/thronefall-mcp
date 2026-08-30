@@ -1,7 +1,9 @@
 using ThronefallControl.Dto;
 using ThronefallControl.Game;
 using ThronefallControl.Http;
+using ThronefallControl.Tests.Fakes;
 using Xunit;
+using static ThronefallControl.Tests.Fakes.ObservationFakeWorld;
 
 namespace ThronefallControl.Tests;
 
@@ -11,7 +13,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Tick_increments_generation_on_scene_change_and_stales_old_ids()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         var facade = new GameFacade(world);
         facade.Tick();
         var firstGen = facade.Ids.SceneGeneration;
@@ -36,7 +38,7 @@ public sealed class StateObservationTests
     [Fact]
     public void GetState_never_refuses_and_detects_phase()
     {
-        var world = new FakeWorld { HintsValue = Menu() };
+        var world = new ObservationFakeWorld { HintsValue = Menu() };
         Fill(world);
         var facade = new GameFacade(world);
         var dto = facade.GetState();
@@ -64,7 +66,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Include_keeps_requested_slices_and_omits_the_rest()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         var facade = new GameFacade(world);
         var dto = facade.GetState("slots,units,spawns");
@@ -85,7 +87,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Illegal_include_tokens_are_omitted()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         var facade = new GameFacade(world);
         var dto = facade.GetState("slots,bogus,not-a-field");
@@ -101,7 +103,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Http_include_omits_unrequested_fields_from_json()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var router = Router.CreateDefault();
@@ -125,7 +127,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Slice_in_illegal_phase_returns_error_envelope()
     {
-        var world = new FakeWorld { HintsValue = Menu() };
+        var world = new ObservationFakeWorld { HintsValue = Menu() };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var router = Router.CreateDefault();
@@ -144,7 +146,7 @@ public sealed class StateObservationTests
     [Fact]
     public void End_screen_allows_slots_but_not_units()
     {
-        var world = new FakeWorld
+        var world = new ObservationFakeWorld
         {
             HintsValue = new WorldHints
             {
@@ -170,7 +172,7 @@ public sealed class StateObservationTests
     [Fact]
     public void GetState_in_menu_is_ok_and_loadout_slice_is_legal()
     {
-        var world = new FakeWorld { HintsValue = Menu() };
+        var world = new ObservationFakeWorld { HintsValue = Menu() };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var router = Router.CreateDefault();
@@ -191,7 +193,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Clock_final_wave_and_score_appear_in_get_state()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var router = Router.CreateDefault();
@@ -215,7 +217,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Include_slots_omits_training_from_json()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var router = Router.CreateDefault();
@@ -231,7 +233,7 @@ public sealed class StateObservationTests
     [Fact]
     public void Training_include_and_slice_are_legal_in_day_illegal_in_menu()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var router = Router.CreateDefault();
@@ -276,21 +278,7 @@ public sealed class StateObservationTests
         Assert.Equal(2, ETags.ControlGroup(new List<string> { "PlayerUnit", "Group2" }));
     }
 
-    static WorldHints Menu() => new()
-    {
-        SceneName = "_StartMenu",
-        SceneState = "MainMenu"
-    };
-
-    static WorldHints InGame(string scene, string timestate = "Day") => new()
-    {
-        SceneName = scene,
-        SceneState = "InGame",
-        Timestate = timestate,
-        MatchState = "InMatch"
-    };
-
-    static void Fill(FakeWorld world)
+    static void Fill(ObservationFakeWorld world)
     {
         world.Template = new StateDto
         {
@@ -348,51 +336,10 @@ public sealed class StateObservationTests
         };
     }
 
-    static CurrentScope Push(GameFacade facade)
-    {
-        var previous = GameFacade.Current;
-        GameFacade.Current = facade;
-        return new CurrentScope(previous);
-    }
-
-    sealed class CurrentScope : IDisposable
-    {
-        readonly GameFacade _previous;
-        public CurrentScope(GameFacade previous) => _previous = previous;
-        public void Dispose() => GameFacade.Current = _previous;
-    }
-
     enum TagManagerETag
     {
         NONE = 0,
         PlayerOwned = 1,
         Group2 = 46
-    }
-
-    sealed class FakeWorld : IWorld
-    {
-        public WorldHints HintsValue { get; set; } = new();
-        public StateDto Template { get; set; } = new();
-
-        public WorldHints Hints() => HintsValue;
-
-        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
-        {
-            dto.Level = Template.Level ?? new LevelDto { SceneName = HintsValue.SceneName };
-            dto.Economy = Template.Economy;
-            dto.Clock = Template.Clock;
-            dto.King = Template.King;
-            dto.Settings = Template.Settings;
-            dto.Loadout = Template.Loadout;
-            dto.Slots = Template.Slots;
-            dto.Units = Template.Units;
-            dto.Enemies = Template.Enemies;
-            dto.Spawns = Template.Spawns;
-            dto.NextWave = Template.NextWave;
-            dto.Cutters = Template.Cutters;
-            dto.Training = Template.Training;
-            _ = include;
-            _ = facade;
-        }
     }
 }

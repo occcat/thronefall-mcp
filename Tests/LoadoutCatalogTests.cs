@@ -1,20 +1,18 @@
 using ThronefallControl.Dto;
 using ThronefallControl.Game;
 using ThronefallControl.Http;
+using ThronefallControl.Tests.Fakes;
 using ThronefallControl.Tests.GameFakes;
 using Xunit;
+using static ThronefallControl.Tests.Fakes.ObservationFakeWorld;
 
 namespace ThronefallControl.Tests;
 
 [Collection(GameFacadeCollection.Name)]
 public sealed class LoadoutCatalogTests : IDisposable
 {
-    GameFacade? _previous;
-
     public void Dispose()
     {
-        if (_previous != null)
-            GameFacade.Current = _previous;
         Loadout.Reset();
         RuntimeState.Reset();
     }
@@ -22,7 +20,7 @@ public sealed class LoadoutCatalogTests : IDisposable
     [Fact]
     public void Get_state_loadout_json_includes_catalog_and_quests()
     {
-        var world = new FakeWorld { HintsValue = Menu() };
+        var world = new ObservationFakeWorld { HintsValue = Menu() };
         world.Template.Loadout = new LoadoutDto
         {
             AsString = { "Royal Mint" },
@@ -49,7 +47,7 @@ public sealed class LoadoutCatalogTests : IDisposable
             Quests = { new QuestDto { Statement = "Beat the level", Complete = true } },
             Worth = 12
         };
-        Push(new GameFacade(world));
+        using var _ = Push(new GameFacade(world));
 
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state/loadout"));
         Assert.Equal(200, res.Status);
@@ -75,7 +73,7 @@ public sealed class LoadoutCatalogTests : IDisposable
     [Fact]
     public void Include_without_loadout_omits_catalog()
     {
-        var world = new FakeWorld { HintsValue = InGame() };
+        var world = new ObservationFakeWorld { HintsValue = InGame() };
         world.Template.Loadout = new LoadoutDto
         {
             Catalog = { new LoadoutItemDto { Name = "Royal Mint", Kind = "perk" } },
@@ -85,7 +83,7 @@ public sealed class LoadoutCatalogTests : IDisposable
         {
             new() { BuildingName = "House" }
         };
-        Push(new GameFacade(world));
+        using var _ = Push(new GameFacade(world));
 
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state?include=slots"));
         Assert.Equal(200, res.Status);
@@ -200,51 +198,6 @@ public sealed class LoadoutCatalogTests : IDisposable
         Assert.DoesNotContain("worth", json, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"catalog\":[]", json);
         Assert.Contains("\"quests\":[]", json);
-    }
-
-    void Push(GameFacade facade)
-    {
-        _previous = GameFacade.Current;
-        GameFacade.Current = facade;
-    }
-
-    static WorldHints Menu() => new()
-    {
-        SceneName = "_StartMenu",
-        SceneState = "MainMenu"
-    };
-
-    static WorldHints InGame() => new()
-    {
-        SceneName = "Nordfels",
-        SceneState = "InGame",
-        Timestate = "Day",
-        MatchState = "InMatch"
-    };
-
-    sealed class FakeWorld : IWorld
-    {
-        public WorldHints HintsValue { get; set; } = new();
-        public StateDto Template { get; set; } = new();
-
-        public WorldHints Hints() => HintsValue;
-
-        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
-        {
-            dto.Level = Template.Level ?? new LevelDto { SceneName = HintsValue.SceneName };
-            dto.Economy = Template.Economy;
-            dto.Clock = Template.Clock;
-            dto.King = Template.King;
-            dto.Settings = Template.Settings;
-            dto.Loadout = Template.Loadout;
-            dto.Slots = Template.Slots;
-            dto.Units = Template.Units;
-            dto.Enemies = Template.Enemies;
-            dto.Spawns = Template.Spawns;
-            dto.Cutters = Template.Cutters;
-            _ = include;
-            _ = facade;
-        }
     }
 
     sealed class LevelInfoWithQuestsProperty
