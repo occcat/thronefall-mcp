@@ -89,7 +89,7 @@ public static class OpenApi
             ["/state/units"] = new Dictionary<string, object> { ["get"] = Op("GetUnits", "Player units. Legal in day/night.") },
             ["/state/enemies"] = new Dictionary<string, object> { ["get"] = Op("GetEnemies", "Enemy summary. Legal in day/night.") },
             ["/state/spawns"] = new Dictionary<string, object> { ["get"] = Op("GetSpawns", "All map spawn lines and suggested rallies. Not tonight's wave.") },
-            ["/state/next-wave"] = new Dictionary<string, object> { ["get"] = Op("GetNextWave", "Tonight's wave preview. Legal in day/night. Read-only; does not place HUD markers.") },
+            ["/state/next-wave"] = new Dictionary<string, object> { ["get"] = Op("GetNextWave", "Tonight's wave preview. Use nextWave.mouths[].enemies for per-mouth types and counts. Legal in day/night. Read-only; does not place HUD markers.") },
             ["/state/loadout"] = new Dictionary<string, object> { ["get"] = Op("GetLoadout", "Current perk/weapon string. Legal in menu/level_select/day/night.") },
             ["/openapi.json"] = new Dictionary<string, object>
             {

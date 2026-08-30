@@ -11,7 +11,7 @@ Daily hard rules: **spend every spendable coin**, **deploy only in `day`**, then
 
 Do not `POST /units/deploy` or rewrite homes after the night has started. Dawn resets homes; night is for holding the posts you already placed.
 
-**Do not invent tonight's mouths.** First `GET /state/next-wave` (or MCP `thronefall_next_wave`). Use **only** the named rallies in `nextWave.groups`. If `available` is false, **ask the user** and wait. `/state/spawns` is every line on the map, not tonight — never treat those lines (often eight) as this night's assignment.
+**Do not invent tonight's mouths.** First `GET /state/next-wave` (or MCP `thronefall_next_wave`). Post using **`mouths[]`**: each mouth's `spawn` / `suggestedRally` and **`mouths[].enemies[]`** (type + count). Do not assign from the top-level `enemies[]` (map-wide WaveInfo rollup) or from `groups[]` alone. If `available` is false, **ask the user** and wait. `/state/spawns` is every line on the map, not tonight — never treat those lines (often eight) as this night's assignment.
 
 Do not call `POST /night/call` unless the user agrees.
 
@@ -66,7 +66,7 @@ Omit `/state` generation on slot POSTs. Parallel non-choice builds; serial anyth
 
 You need **this night's** rallies.
 
-1. `GET /state/next-wave`. When `available` is true, post **only** the rallies named in `groups` (`spawn.name` / `suggestedRally`). Ignore every other `EnemySpawnLine`.
+1. `GET /state/next-wave`. When `available` is true, post **only** the rallies in `mouths[]`. Score each mouth from **`mouths[].enemies[]`** (name + count + elite), not the top-level `enemies[]`. Ignore every other `EnemySpawnLine`.
 2. If `available` is false, **ask the user** which mouths they see (HUD markers / they watched a prior night). Wait.
 3. Never treat `/state/spawns` as tonight. Those are all map lines.
 

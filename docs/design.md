@@ -657,8 +657,9 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 
 - 只读 `EnemySpawner.GetNextWave()` → `Wave { warningText, spawns[], difficultyMulti }` 与 `GetWaveInfoForNextWave()` → `WaveInfo { waveNumber, outOfWaves, goldReward, enemies[], difficultyMulti }`。
 - `groups[]` 来自 `Wave.spawns`：`spawnLine` 用 `IdRegistry` 登记为 `kind=spawn`，`suggestedRally` 与 `/state/spawns` 同一套折线算法对齐；找不到 spawn 对象时 `available` 仍可为 true，该 group 的 id 用当时 `instanceId`。
-- `enemies[]` 来自 `WaveEnemyInfo`：`enemyName`、`enemyCount`、`eliteEnemy`、`maxHP`、`speed`、`range`、`attackDamage`、`attackCooldown`。
-- `GetNextWave` 返回 null 或抛错 → `available=false`，空 `groups` / `enemies`，不要编造出线。
+- `enemies[]` 来自 `WaveEnemyInfo`：`enemyName`、`enemyCount`、`eliteEnemy`、`maxHP`、`speed`、`range`、`attackDamage`、`attackCooldown`。这是全图汇总。
+- `mouths[]` 按 `groups` 的 spawn id（否则 name）聚合，同口同名同 elite 的 count 相加。**排兵看 `mouths[].enemies`，不要只看顶层 `enemies[]`。**
+- `GetNextWave` 返回 null 或抛错 → `available=false`，空 `groups` / `enemies` / `mouths`，不要编造出线。
 - **禁止**调用 `PlaceMarkersForNextWave`、`DebugSkipWave`、`StartSpawning`（HUD 副作用 / 作弊 / 开打）。
 
 #### Cutter DTO
