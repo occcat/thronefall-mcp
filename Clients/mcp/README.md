@@ -10,7 +10,7 @@ return structured JSON instead of crashing the session:
 {"ok":false,"error":"game_not_running","message":"cannot reach http://127.0.0.1:17891: ..."}
 ```
 
-No pip packages. Tools map to published HTTP routes.
+No pip packages. Tools map to published HTTP routes. How to play a match (what to buy, where to stand, `hold: false`, no king teleport) is [`.grok/skills/thronefall-play/SKILL.md`](../../.grok/skills/thronefall-play/SKILL.md).
 
 ## Run
 
@@ -20,7 +20,7 @@ python3 Clients/mcp/server.py
 
 | Environment | Default | Meaning |
 | --- | --- | --- |
-| `THRONEFALL_URL` | `http://127.0.0.1:17891` | Plugin base URL |
+| `THRONEFALL_URL` | `http://127.0.0.1:17891` | Plugin base URL. Set this if `HttpPort` is not 17891. |
 | `THRONEFALL_TOKEN` | empty | Sent as `X-Thronefall-Token` |
 | `THRONEFALL_TIMEOUT` | `2.5` | HTTP timeout in seconds |
 
@@ -82,4 +82,8 @@ Replace `/ABS/PATH/to/thronefall-mcp` with the clone root. Then
 
 `dryRun=true` is forwarded as `?dryRun=true`. Missing `clientRequestId` is filled in.
 
-`thronefall_units_deploy` maps to `POST /units/deploy` (picks / target / hold / spacing=2).
+`thronefall_units_deploy` maps to `POST /units/deploy` (picks / target / hold / spacing=2). `typeName`+`count` re-picks the same squad; split mouths with `ids`.
+
+`hold` on command / deploy / send-to-spawn defaults to `true` in the HTTP DTO. A play loop must send `"hold": false`.
+
+`thronefall_king_teleport` is on the wire. The play skill does not call it.

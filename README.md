@@ -37,7 +37,7 @@ Paste this into your agent:
 ```
 Set up thronefall-mcp for me: https://github.com/occcat/thronefall-mcp
 
-Read README.md and docs/design.md. Do not click the game. Drive it through the local HTTP API on 127.0.0.1:17891.
+Read README.md, docs/design.md, and .grok/skills/thronefall-play/SKILL.md. Do not click the game. Drive it through the local HTTP API (default 127.0.0.1:17891; use THRONEFALL_URL if the plugin port changed).
 ```
 
 ### 3. Install BepInEx 5 unix doorstop (macOS)
@@ -75,11 +75,14 @@ Apple Silicon: this plugin does not use Harmony. If doorstop still fails to inje
 ```bash
 curl -s http://127.0.0.1:17891/health
 curl -s http://127.0.0.1:17891/openapi.json
-curl -s 'http://127.0.0.1:17891/state?include=slots,units,spawns'
+curl -s 'http://127.0.0.1:17891/state?include=slots,units,nextWave'
+curl -s http://127.0.0.1:17891/state/next-wave
 curl -s -X POST http://127.0.0.1:17891/harvest \
   -H 'Content-Type: application/json' \
   -d '{"clientRequestId":"day-1-harvest"}'
 ```
+
+Tonight's mouths are `GET /state/next-wave` → `mouths[]`. `include=spawns` / `GET /state/spawns` is every line on the map, not tonight. Port is `HttpPort` (default `17891`); if you changed it, set `THRONEFALL_URL`.
 
 Python: `Clients/thronefall_control.py` (`Thronefall().health()`, `.select_loadout(...)`, `.night_policy("human")`, `.start_level("Nordfels")`).
 
@@ -88,9 +91,9 @@ Python: `Clients/thronefall_control.py` (`Thronefall().health()`, `.select_loado
 | Feature | What it does |
 | --- | --- |
 | **In-process calls, not fake clicks** | Harvest, build, and upgrade go through `BuildSlot.TryToBuildOrUpgradeAndPay` and `BuildingInteractor.Harvest`. The king does not have to walk into range. |
-| **A snapshot the model can actually plan on** | `GET /state` returns gold, day/night, every slot's level and next cost, unit HP/home/hold, and enemy spawn lines — live values, not wiki tables. |
-| **Units go to coordinates, buildings stay on slots** | `POST /units/command` `WarpTo`s units to a world point and still reports `path=fallback`. `POST /units/deploy` picks by type/ids (`spacing` defaults to 2). `POST /units/send-to-spawn` maps a unit type onto an `EnemySpawnLine`. `hold` defaults to `true`. |
-| **You keep the night, or you don't** | Night policy is `human` (default: no combat), `afk_castle` (king to castle), or `scripted_posts` (**records intent only, no unit dispatch**). Combat micro is out of scope. |
+| **A snapshot the model can actually plan on** | `GET /state` returns gold, day/night, slots, units, and loadout. Tonight's mouths are `GET /state/next-wave` (`mouths[]`) — live values, not wiki tables. |
+| **Units go to coordinates, buildings stay on slots** | `POST /units/command` `WarpTo`s units to a world point and still reports `path=fallback`. `POST /units/deploy` picks by type/ids (`spacing` defaults to 2). `POST /units/send-to-spawn` maps a unit type onto an `EnemySpawnLine`. API `hold` defaults to `true`; a play loop must send `"hold": false`. Split mouths with `selector.ids` — `typeName`+`count` re-picks the same squad. |
+| **You keep the night, or you don't** | Night policy is `human` (default), `afk_castle` (king to castle), or `scripted_posts` (**records intent only, no unit dispatch**). The play skill stays on `human` and does not teleport the king. Combat micro is out of scope. |
 | **Loopback only** | `HttpListener` binds `127.0.0.1:17891`. Optional `X-Thronefall-Token`. Cheats (`DEBUGUpgradeToMax`, skip wave, god mode) stay behind flags, off by default. |
 | **Any agent that can HTTP** | Grok, Claude Code, Codex, curl, or a thin Python client. Strategy stays outside the plugin so the same actuator can serve all of them. |
 
@@ -118,18 +121,21 @@ Screenshot bots re-click HUD every patch. Memory tables break when Unity moves a
 | Design (macOS Mono, HTTP, IDs, night policies) | Done — [`docs/design.md`](docs/design.md) |
 | Repo conventions | Done — [`AGENTS.md`](AGENTS.md) |
 | BepInEx plugin + HTTP | Published on `127.0.0.1:17891` — contract is [`GET /openapi.json`](Http/OpenApi.cs) |
-| MCP stdio wrapper | Present — [`Clients/mcp`](Clients/mcp) exposes 13 tools over the same HTTP API |
+| MCP stdio wrapper | Present — [`Clients/mcp`](Clients/mcp) exposes 14 tools over the same HTTP API |
+| Play skill | [`.grok/skills/thronefall-play/SKILL.md`](.grok/skills/thronefall-play/SKILL.md) — what to buy, where to stand, how to call night |
 | Windows / Linux game builds | Not this milestone |
 
 Plugin GUID: `com.thronefall.control`. Default bind: `127.0.0.1:17891`. Default night policy: `human`.
 
 ## MCP
 
-HTTP on `127.0.0.1:17891` is the source of truth. A stdio MCP wrapper lives at [`Clients/mcp`](Clients/mcp) (13 tools, including `thronefall_next_wave` and `thronefall_slot_choice_cancel`). HTTP also has `POST /units/deploy`. Drive the game with curl, `Clients/thronefall_control.py`, or:
+HTTP on `127.0.0.1:17891` is the source of truth. A stdio MCP wrapper lives at [`Clients/mcp`](Clients/mcp) (14 tools, including `thronefall_next_wave`, `thronefall_units_deploy`, and `thronefall_slot_choice_cancel`). `thronefall_king_teleport` exists on the wire; the play skill does not use it. Drive the game with curl, `Clients/thronefall_control.py`, or:
 
 ```bash
-grok mcp add thronefall -- python3 Clients/mcp
+grok mcp add thronefall -- python3 Clients/mcp/server.py
 ```
+
+Set `THRONEFALL_URL` if `HttpPort` is not 17891.
 
 ## Unit tests (no game)
 
@@ -144,8 +150,11 @@ Covers the HTTP router, token auth, JSON error envelope, main-thread queue with 
 ## Docs
 
 - [`AGENTS.md`](AGENTS.md) — Conventional Commits (Chinese body, what changed + why)
+- [`.grok/skills/thronefall-play/SKILL.md`](.grok/skills/thronefall-play/SKILL.md) — how an agent plays a match (strategy, tactics, HTTP)
+- [`.grok/skills/thronefall-play/references/codex.md`](.grok/skills/thronefall-play/references/codex.md) — maps, buildings, units, matchups
 - [`docs/design.md`](docs/design.md) — BepInEx plugin HTTP design
 - [`docs/TESTPLAN.md`](docs/TESTPLAN.md) — unit tests and Neuland / Nordfels curl checklist
+- [`docs/units.md`](docs/units.md) — command / deploy / hold
 - [`Scripts/install_macos.sh`](Scripts/install_macos.sh) — BepInEx 5 unix doorstop into the Steam `.app` root
 - [`Scripts/run_bepinex.example.sh`](Scripts/run_bepinex.example.sh) — `executable_name=thronefall.app` (not Windows Thunderstore)
 - [`Clients/thronefall_control.py`](Clients/thronefall_control.py) — stdlib HTTP client
