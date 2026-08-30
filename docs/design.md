@@ -570,6 +570,9 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
   "nextUpgradeOrBuildEnergyCoreCost": 0,
   "canBeUpgraded": true,
   "nextUpgradeIsChoice": false,
+  "tooltip": "",
+  "nextUpgradeLabel": "",
+  "unlockPreview": { "buildingNames": [], "slotIds": [] },
   "canBeHarvested": true,
   "harvestedToday": false,
   "knockedOutTonight": false,
@@ -598,6 +601,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 - `get_Level` / `get_State`（`BuildingState.Blueprint | Built`）/ `get_GoldIncome` / `get_EnergyCoreIncome`
 - `get_NextUpgradeOrBuildCost` / `get_NextUpgradeOrBuildEnergyCoreCost`
 - `get_CanBeUpgraded` / `get_NextUpgradeIsChoice` / `get_IsBlueprint`
+- `ReturnTooltip` / `GET_LOCIDENTIFIER_UPGRADE`（及 choice 的 CHOICENAME / CHOICEDESCRIPTION）/ `GetBuildSlotsThatWillUnlockWhenUpgraded` → `tooltip` / `nextUpgradeLabel` / `unlockPreview`
 - `get_IsRootOf` / `get_IsActivatorOf` / `get_ActivatorBuilding` / `get_ActivatorLevel`
 - `BuildingInteractor.get_canBeHarvested` / `get_IsWaitingForChoice` / `get_KnockedOutTonight` / `harvestedToday`（private 字段，反射或等价公开）
 - `get_HpParent` → 其上的 `Hp`
