@@ -12,6 +12,24 @@ public sealed class NextWaveDto
     public string WarningText { get; set; } = "";
     public List<NextWaveGroupDto> Groups { get; set; } = new();
     public List<NextWaveEnemyDto> Enemies { get; set; } = new();
+    public List<NextWaveMouthDto> Mouths { get; set; } = new();
+}
+
+public sealed class NextWaveMouthDto
+{
+    public EntityId Spawn { get; set; } = new() { Kind = "spawn" };
+    public Vec3Dto SuggestedRally { get; set; } = new();
+    public List<NextWaveMouthEnemyDto> Enemies { get; set; } = new();
+}
+
+public sealed class NextWaveMouthEnemyDto
+{
+    public string Name { get; set; } = "";
+    public int Count { get; set; }
+    public bool Elite { get; set; }
+    public int GoldCoins { get; set; }
+    public float Delay { get; set; }
+    public float Interval { get; set; }
 }
 
 public sealed class NextWaveGroupDto
