@@ -13,8 +13,7 @@
     <Compile Include="Http/**/*.cs" />
     <Compile Include="Dto/**/*.cs" />
     <Compile Include="Config/**/*.cs" />
-    <Compile Include="Game/MainThread.cs" />
-    <Compile Include="Game/IdRegistry.cs" />
+    <Compile Include="Game/**/*.cs" />
   </ItemGroup>
 
   <ItemGroup>

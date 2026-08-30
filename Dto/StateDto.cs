@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Newtonsoft.Json;
 
 namespace ThronefallControl.Dto;
 
@@ -13,12 +14,25 @@ public sealed class StateDto
     public ClockDto Clock { get; set; } = new();
     public KingDto King { get; set; } = new();
     public SettingsDto Settings { get; set; } = new();
-    public LoadoutDto Loadout { get; set; } = new();
-    public List<SlotDto> Slots { get; set; } = new();
-    public List<UnitDto> Units { get; set; } = new();
-    public EnemySummaryDto Enemies { get; set; } = new();
-    public List<SpawnLineDto> Spawns { get; set; } = new();
-    public List<CutterDto> Cutters { get; set; } = new();
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public LoadoutDto? Loadout { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public List<SlotDto>? Slots { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public List<UnitDto>? Units { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public EnemySummaryDto? Enemies { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public List<SpawnLineDto>? Spawns { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public List<CutterDto>? Cutters { get; set; }
+
     public string NightPolicy { get; set; } = NightPolicies.Human;
 }
 
