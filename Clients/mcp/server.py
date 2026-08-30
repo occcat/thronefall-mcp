@@ -159,6 +159,10 @@ def tool_slot_upgrade(arguments: dict[str, Any]) -> dict[str, Any]:
     return proxy_post(f"/slots/{slot_id}/upgrade", body)
 
 
+def tool_slot_choice_cancel(arguments: dict[str, Any]) -> dict[str, Any]:
+    return proxy_post("/slots/choice/cancel", arguments)
+
+
 def tool_night_call(arguments: dict[str, Any]) -> dict[str, Any]:
     return proxy_post("/night/call", arguments)
 
@@ -260,6 +264,19 @@ TOOLS: list[dict[str, Any]] = [
             "additionalProperties": True,
         },
         "handler": tool_slot_upgrade,
+    },
+    {
+        "name": "thronefall_slot_choice_cancel",
+        "description": "POST /slots/choice/cancel. Cancel the in-progress upgrade choice without picking a branch.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "clientRequestId": CLIENT_REQUEST,
+                "dryRun": DRY_RUN,
+            },
+            "additionalProperties": True,
+        },
+        "handler": tool_slot_choice_cancel,
     },
     {
         "name": "thronefall_night_call",
