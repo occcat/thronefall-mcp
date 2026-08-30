@@ -141,6 +141,24 @@ def tool_state(arguments: dict[str, Any]) -> dict[str, Any]:
     return http_json("GET", "/state", query=query)
 
 
+def tool_next_wave(arguments: dict[str, Any]) -> dict[str, Any]:
+    _ = arguments
+    body = http_json("GET", "/state/next-wave")
+    if not isinstance(body, dict):
+        return body
+    preview = body.get("nextWave")
+    mouths = None
+    available = None
+    if isinstance(preview, dict):
+        mouths = preview.get("mouths")
+        available = preview.get("available")
+    result = dict(body)
+    result["mouths"] = mouths if mouths is not None else []
+    if available is not None:
+        result["available"] = available
+    return result
+
+
 def tool_harvest(arguments: dict[str, Any]) -> dict[str, Any]:
     return proxy_post("/harvest", arguments)
 
@@ -157,6 +175,10 @@ def tool_slot_upgrade(arguments: dict[str, Any]) -> dict[str, Any]:
     if slot_id is None or slot_id == "":
         return {"ok": False, "error": "invalid_arguments", "message": "id is required"}
     return proxy_post(f"/slots/{slot_id}/upgrade", body)
+
+
+def tool_slot_choice_cancel(arguments: dict[str, Any]) -> dict[str, Any]:
+    return proxy_post("/slots/choice/cancel", arguments)
 
 
 def tool_night_call(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -219,7 +241,7 @@ TOOLS: list[dict[str, Any]] = [
             "type": "object",
             "properties": {
                 "include": {
-                    "description": "Comma-separated slices: slots,units,enemies,spawns,loadout.",
+                    "description": "Comma-separated slices: slots,units,enemies,spawns,loadout,nextWave.",
                     "anyOf": [
                         {"type": "string"},
                         {"type": "array", "items": {"type": "string"}},
@@ -229,6 +251,21 @@ TOOLS: list[dict[str, Any]] = [
             "additionalProperties": False,
         },
         "handler": tool_state,
+    },
+    {
+        "name": "thronefall_next_wave",
+        "description": (
+            "GET /state/next-wave. Tonight's mouths and each mouth's enemy types+counts "
+            "(mouths[].enemies[] / nextWave.mouths). Do not use /state/spawns — that is "
+            "every map line, not tonight. Top-level mouths and available are copies; "
+            "nextWave still has waveNumber."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": False,
+        },
+        "handler": tool_next_wave,
     },
     {
         "name": "thronefall_harvest",
@@ -260,6 +297,19 @@ TOOLS: list[dict[str, Any]] = [
             "additionalProperties": True,
         },
         "handler": tool_slot_upgrade,
+    },
+    {
+        "name": "thronefall_slot_choice_cancel",
+        "description": "POST /slots/choice/cancel. Cancel the in-progress upgrade choice without picking a branch.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "clientRequestId": CLIENT_REQUEST,
+                "dryRun": DRY_RUN,
+            },
+            "additionalProperties": True,
+        },
+        "handler": tool_slot_choice_cancel,
     },
     {
         "name": "thronefall_night_call",

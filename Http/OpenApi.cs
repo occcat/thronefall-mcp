@@ -83,13 +83,15 @@ public static class OpenApi
             },
             ["/state"] = new Dictionary<string, object>
             {
-                ["get"] = Op("GetState", "Full snapshot. Query include=slots,units,enemies,spawns,loadout to clip arrays.")
+                ["get"] = Op("GetState", "Full snapshot. Query include=slots,units,training,enemies,spawns,loadout,nextWave to clip arrays.")
             },
             ["/state/slots"] = new Dictionary<string, object> { ["get"] = Op("GetSlots", "Build slots. Legal in day/night/end_screen.") },
             ["/state/units"] = new Dictionary<string, object> { ["get"] = Op("GetUnits", "Player units. Legal in day/night.") },
+            ["/state/training"] = new Dictionary<string, object> { ["get"] = Op("GetTraining", "Barracks training / respawn progress. Legal in day/night.") },
             ["/state/enemies"] = new Dictionary<string, object> { ["get"] = Op("GetEnemies", "Enemy summary. Legal in day/night.") },
-            ["/state/spawns"] = new Dictionary<string, object> { ["get"] = Op("GetSpawns", "Spawn lines and suggested rallies.") },
-            ["/state/loadout"] = new Dictionary<string, object> { ["get"] = Op("GetLoadout", "Current perk/weapon string. Legal in menu/level_select/day/night.") },
+            ["/state/spawns"] = new Dictionary<string, object> { ["get"] = Op("GetSpawns", "All map spawn lines and suggested rallies. Not tonight's wave.") },
+            ["/state/next-wave"] = new Dictionary<string, object> { ["get"] = Op("GetNextWave", "Tonight's wave preview. Use nextWave.mouths[].enemies for per-mouth types and counts. Legal in day/night. Read-only; does not place HUD markers.") },
+            ["/state/loadout"] = new Dictionary<string, object> { ["get"] = Op("GetLoadout", "Equipped names plus perk/weapon/mutator catalog, quests, and loadout worth. Legal in menu/level_select/day/night.") },
             ["/openapi.json"] = new Dictionary<string, object>
             {
                 ["get"] = Op("GetOpenApi", "OpenAPI 3 document. Served on the HTTP thread.")
@@ -98,6 +100,7 @@ public static class OpenApi
             ["/slots/{id}/build"] = Post("BuildSlot", "TryToBuildOrUpgradeAndPay. Legal in day."),
             ["/slots/{id}/upgrade"] = Post("UpgradeSlot", "Alias of build. Legal in day."),
             ["/slots/{id}/choice"] = Post("ChooseUpgrade", "Complete an upgrade branch. Legal in day."),
+            ["/slots/choice/cancel"] = Post("CancelUpgradeChoice", "Cancel the in-progress upgrade choice via ChoiceManager.CancelChoice. Legal in day."),
             ["/night/call"] = Post("CallNight", "SwitchToNight when IsFreeToCallNight. Legal in day. Does not skip waves."),
             ["/night/policy"] = Post("SetNightPolicy", "Set and immediately run a night policy. human: no combat. afk_castle: teleport king to castle. scripted_posts: intent-only until the units worker owns dispatch — this call does not post units. Legal in day/night."),
             ["/units/command"] = Post("CommandUnits", "Send units to a world point. Legal in day/night."),

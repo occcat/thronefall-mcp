@@ -6,7 +6,9 @@ namespace ThronefallControl.Tests.GameFakes;
 public class Equippable
 {
     public string displayName = "";
+    public string description = "";
     public bool IsUnlocked { get; set; } = true;
+    public string GetLockedTooltip() => IsUnlocked ? "" : "Locked";
 }
 
 public class TFUIEquippable
@@ -62,9 +64,31 @@ public class PlayerInteraction
     public static PlayerInteraction instance = new();
 }
 
+public class LevelData
+{
+}
+
+public class Quest
+{
+    public string questType = "";
+    public string statement = "";
+    public bool beaten;
+
+    public string GetMissionStatement() =>
+        string.IsNullOrEmpty(statement) ? questType : statement;
+
+    public bool CheckBeaten(object? data)
+    {
+        _ = data;
+        return beaten;
+    }
+}
+
 public class LevelInfo
 {
     public string sceneName = "";
+    public List<Quest> quests = new();
+    public LevelData LevelData { get; } = new();
 }
 
 public class LevelInteractor

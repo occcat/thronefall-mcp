@@ -27,6 +27,7 @@ public sealed class SlotsModule : IRouteModule
 
     public void Register(Router router)
     {
+        router.Map("POST", "/slots/choice/cancel", Cancel);
         router.Map("POST", "/harvest", Harvest);
         router.Map("POST", "/slots/{id}/build", ctx => BuildOrUpgrade(ctx, "build"));
         router.Map("POST", "/slots/{id}/upgrade", ctx => BuildOrUpgrade(ctx, "upgrade"));
@@ -98,6 +99,20 @@ public sealed class SlotsModule : IRouteModule
             }
 
             return ToHttp(result);
+        });
+    }
+
+    HttpResponse Cancel(RequestContext ctx)
+    {
+        var req = ReadMutate(ctx);
+        return WithIdempotency(req.ClientRequestId, () =>
+        {
+            var backend = RequireBackend(out var missing);
+            if (missing != null)
+                return missing;
+
+            var dryRun = req.DryRun || ctx.DryRun;
+            return ToHttp(Run(() => Game.Slots.CancelChoice(backend!, dryRun)));
         });
     }
 

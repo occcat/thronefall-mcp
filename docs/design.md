@@ -374,6 +374,8 @@ public readonly struct EntityId
 
 Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `needs_choice: true` + 分支列表，**不在同一请求里猜默认分支**。agent 再 `POST /slots/{id}/choice`。若 `IsWaitingForChoice` 仍为 false，插件最多等 4 帧（主线程 `yield` 式 pump，不阻塞 HTTP 超过 timeout）。
 
+要关掉当前选择而不点分支：`POST /slots/choice/cancel` 调 `ChoiceManager.instance.CancelChoice`。**不**开 CheatMenu，**不**走 `OnUpgradeChoiceComplete`。`!ChoiceBusy` 且没有 slot `IsWaitingForChoice` 时 409 `not_found`。
+
 ### 夜间策略（执行器，不是 AI）
 
 | policy | 插件做什么 | 插件不做什么 |
@@ -430,17 +432,20 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | 方法 | 路径 | 合法 phase | 行为 |
 | --- | --- | --- | --- |
 | GET | `/health` | 任何（含 HTTP 线程可答的子集） | 见下。`alive` 不进主线程；`ready` 进主线程读 phase |
-| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,enemies,spawns,loadout` |
+| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,training,enemies,spawns,loadout,nextWave`（空 include=All，含 nextWave） |
 | GET | `/state/slots` | `day/night/end_screen` | 仅建筑 |
 | GET | `/state/units` | `day/night` | 玩家单位 |
+| GET | `/state/training` | `day/night` | 兵营训练 / 复活倒计时 |
 | GET | `/state/enemies` | `day/night` | 敌军摘要 |
-| GET | `/state/spawns` | `day/night` | spawn lines + wave info |
-| GET | `/state/loadout` | `menu/level_select/day/night` | 装备与 perk 点 |
+| GET | `/state/spawns` | `day/night` | 地图全部 `EnemySpawnLine` + `suggestedRally`。**不是**今晚波次 |
+| GET | `/state/next-wave` | `day/night` | 今晚波次预览。`available=false` 表示读不到，不要编造出线 |
+| GET | `/state/loadout` | `menu/level_select/day/night` | 已装备名、perk/weapon/mutator 目录、任务、loadout worth |
 | GET | `/openapi.json` | 任何（HTTP 线程） | 静态 OpenAPI 3 文档 |
 | POST | `/harvest` | `day` | 收全部或一个 slot |
 | POST | `/slots/{id}/build` | `day` | `TryToBuildOrUpgradeAndPay` |
 | POST | `/slots/{id}/upgrade` | `day` | 同上（语义别名） |
 | POST | `/slots/{id}/choice` | `day` | `OnUpgradeChoiceComplete` |
+| POST | `/slots/choice/cancel` | `day` | `ChoiceManager.CancelChoice`。没有进行中的 choice 时 409 `not_found`，不假装 `canceled=true` |
 | POST | `/night/call` | `day` 且 `IsFreeToCallNight` | `DayNightCycle.SwitchToNight` |
 | POST | `/units/command` | `day/night` | 派到世界点 |
 | POST | `/units/follow` | `day/night` | `FollowPlayer` |
@@ -510,7 +515,12 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
     "afterSunrise": true,
     "wavenumber": 11,
     "waveCount": 12,
-    "spawningInProgress": false
+    "spawningInProgress": false,
+    "finalWaveComingUp": false,
+    "preFinalWaveComingUp": false,
+    "waveBeforeFinalWaveComingUp": false,
+    "currentScore": 0,
+    "maxScorePerNight": 0
   },
   "king": {
     "id": { "instanceId": 123, "generation": 4, "kind": "king", "name": "Player Character" },
@@ -527,10 +537,20 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
   },
   "loadout": {
     "asString": ["Royal Mint", "Arcane Towers", "Light Spear"],
-    "perkPointsRemaining": 0
+    "perkPointsRemaining": 0,
+    "catalog": [
+      { "name": "Royal Mint", "kind": "perk", "locked": false, "unlocked": true, "description": "Start with extra gold" },
+      { "name": "God King", "kind": "perk", "locked": true, "unlocked": false, "description": "Locked" },
+      { "name": "Light Spear", "kind": "weapon", "locked": false, "unlocked": true, "description": "" }
+    ],
+    "quests": [
+      { "statement": "Beat the level", "complete": true }
+    ],
+    "worth": 12
   },
   "slots": [ { "...": "见下" } ],
   "units": [ { "...": "见下" } ],
+  "training": [ { "slotId": 4412, "buildingName": "Barracks", "hasKnockedOut": true, "timeTillNextRespawn": 3.5 } ],
   "enemies": { "count": 0, "units": [] },
   "spawns": [ { "...": "见下" } ],
   "cutters": [ { "...": "见下" } ],
@@ -552,8 +572,15 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | `king.hp` / `dead` | `PlayerMovement.Hp`（`Hp.HpValue` / `Alive`）、`PlayerMovement.Dead` |
 | `king.position` | `PlayerMovement.instance.transform.position` |
 | `wavenumber` | `EnemySpawner.instance.Wavenumber` / `WaveCount` / `SpawningInProgress` |
+| `finalWaveComingUp` / `waveBeforeFinalWaveComingUp` | `EnemySpawner.FinalWaveComingUp()` / `WaveBeforeFinalWaveComingUp()`（只读方法） |
+| `preFinalWaveComingUp` | `EnemySpawner.PreFinalWaveComingUp` |
+| `currentScore` / `maxScorePerNight` | `ScoreManager.Instance.CurrentScore` / `MaxScorePerNight`（读不到则为 0；**不**调用 `CalculateEndOfNightScore` / `AddDebugPoints`） |
+| `training[]` | `UnitRespawnerForBuildings`：`AtLeastOneUnitIsKnockedOut`、`timeTillNextRespawn`，经 `myBuildSlot` 对上 slot instanceId |
 | `level.*` | `LevelProgressManager.instance.GetLevelDataForActiveScene()` + `LevelInfo.sceneName` |
-| `loadout.asString` | `MatchSave.currentLoadoutAsString`（经 `MatchSaveLoadHandler.CurrentSave`） |
+| `loadout.asString` | `MatchSave.currentLoadoutAsString`（经 `MatchSaveLoadHandler.CurrentSave`）；空则 `PerkManager.CurrentlyEquipped.displayName` |
+| `loadout.catalog` | 选图/菜单：`LoadoutUIHelper.perks/weapons/mutators`（`TFUIEquippable.Data.displayName`、`isPerk/isWeapon/isMutator`、`Locked` / `Equippable.IsUnlocked`、`description`）。局内：`PerkManager.allEquippables`，空则 `CurrentlyEquipped`；kind 由 `EquippablePerk/Weapon/Mutation` 运行时类型推断。读失败保持 `[]` |
+| `loadout.quests` | `LevelProgressManager.GetLevelInfoFromCurrentSceneName().Quests`（回退 `_quests` / `quests`）：`Quest.GetMissionStatement()`，`CheckBeaten(LevelData)` 读得到则填 `complete`，否则 `false` |
+| `loadout.worth` | `LoadoutUIHelper.LoadoutWorth`；读不到则 `null` 且 JSON 省略 |
 | `resetUnitFormationEveryMorning` | `SettingsManager.Instance.ResetUnitFormationEveryMorning` |
 
 #### Slot DTO
@@ -570,6 +597,9 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
   "nextUpgradeOrBuildEnergyCoreCost": 0,
   "canBeUpgraded": true,
   "nextUpgradeIsChoice": false,
+  "tooltip": "",
+  "nextUpgradeLabel": "",
+  "unlockPreview": { "buildingNames": [], "slotIds": [] },
   "canBeHarvested": true,
   "harvestedToday": false,
   "knockedOutTonight": false,
@@ -598,6 +628,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 - `get_Level` / `get_State`（`BuildingState.Blueprint | Built`）/ `get_GoldIncome` / `get_EnergyCoreIncome`
 - `get_NextUpgradeOrBuildCost` / `get_NextUpgradeOrBuildEnergyCoreCost`
 - `get_CanBeUpgraded` / `get_NextUpgradeIsChoice` / `get_IsBlueprint`
+- `ReturnTooltip` / `GET_LOCIDENTIFIER_UPGRADE`（及 choice 的 CHOICENAME / CHOICEDESCRIPTION）/ `GetBuildSlotsThatWillUnlockWhenUpgraded` → `tooltip` / `nextUpgradeLabel` / `unlockPreview`
 - `get_IsRootOf` / `get_IsActivatorOf` / `get_ActivatorBuilding` / `get_ActivatorLevel`
 - `BuildingInteractor.get_canBeHarvested` / `get_IsWaitingForChoice` / `get_KnockedOutTonight` / `harvestedToday`（private 字段，反射或等价公开）
 - `get_HpParent` → 其上的 `Hp`
@@ -652,7 +683,14 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 
 来源：`EnemySpawnLine.difficulty`（private，类型 `ESpawnDifficulty { Normal, EasierForPlayerToDealWith, HarderForPlayerToDealWith }`）、public `canSpawnFlying` / `canSpawnSmallGround` / `canSpawnBigGround`、`get_SpawnLine`、`get_DifficultyBudgetMultiplyer`。`suggestedRally` 由插件计算，不是游戏字段。
 
-Wave 预览（白天决策用）：`EnemySpawner.GetWaveInfoForNextWave()` → `WaveInfo { waveNumber, outOfWaves, goldReward, enemies[], difficultyMulti }`，`WaveEnemyInfo` 含 `enemyName`、`enemyCount`、`maxHP`、`speed`、`range`、`attackDamage`、`attackCooldown`。
+**`/state/spawns` 是地图全部出线，不是今晚。** 今晚预览走 `GET /state/next-wave`（或 `GET /state?include=nextWave`）：
+
+- 只读 `EnemySpawner.GetNextWave()` → `Wave { warningText, spawns[], difficultyMulti }` 与 `GetWaveInfoForNextWave()` → `WaveInfo { waveNumber, outOfWaves, goldReward, enemies[], difficultyMulti }`。
+- `groups[]` 来自 `Wave.spawns`：`spawnLine` 用 `IdRegistry` 登记为 `kind=spawn`，`suggestedRally` 与 `/state/spawns` 同一套折线算法对齐；找不到 spawn 对象时 `available` 仍可为 true，该 group 的 id 用当时 `instanceId`。
+- `enemies[]` 来自 `WaveEnemyInfo`：`enemyName`、`enemyCount`、`eliteEnemy`、`maxHP`、`speed`、`range`、`attackDamage`、`attackCooldown`。这是全图汇总。
+- `mouths[]` 按 `groups` 的 spawn id（否则 name）聚合，同口同名同 elite 的 count 相加。**排兵看 `mouths[].enemies`，不要只看顶层 `enemies[]`。**
+- `GetNextWave` 返回 null 或抛错 → `available=false`，空 `groups` / `enemies` / `mouths`，不要编造出线。
+- **禁止**调用 `PlaceMarkersForNextWave`、`DebugSkipWave`、`StartSpawning`（HUD 副作用 / 作弊 / 开打）。
 
 #### Cutter DTO
 
@@ -683,6 +721,14 @@ Wave 预览（白天决策用）：`EnemySpawner.GetWaveInfoForNextWave()` → `
 ```
 
 调用 `BuildSlot.TryToBuildOrUpgradeAndPay()`。钱不够走游戏自己的失败路径，插件把结果映射为 `insufficient_gold`。`teleportKingNearby=true` 时先 `PlayerMovement.TeleportTo(slot.position)`（纯视觉，不是功能依赖）。
+
+`POST /slots/choice/cancel`
+
+```json
+{ "clientRequestId": "x1", "dryRun": false }
+```
+
+合法 phase 与 `/slots/{id}/choice` 相同（`day`）。成功 `200 { "ok": true, "canceled": true, "phase": "day", "generation": 4 }`，并按游戏 `CancelChoice` 语义清掉 `ChoiceBusy`。没有进行中的 choice（`!ChoiceBusy` 且没有 slot `IsWaitingForChoice`）→ `409 { "error": "not_found" }`，message 说明没有可取消的选择，不返回 `canceled=true`。`dryRun=true` 不调用 `CancelChoice`，返回 `would.action=cancel`。`clientRequestId` 走现有幂等缓存。切场景 → `409 transition_in_progress`。
 
 `POST /units/command`
 

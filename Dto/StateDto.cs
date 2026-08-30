@@ -25,10 +25,16 @@ public sealed class StateDto
     public List<UnitDto>? Units { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public List<TrainingDto>? Training { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public EnemySummaryDto? Enemies { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public List<SpawnLineDto>? Spawns { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public NextWaveDto? NextWave { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public List<CutterDto>? Cutters { get; set; }
@@ -66,6 +72,11 @@ public sealed class ClockDto
     public int Wavenumber { get; set; }
     public int WaveCount { get; set; }
     public bool SpawningInProgress { get; set; }
+    public bool FinalWaveComingUp { get; set; }
+    public bool PreFinalWaveComingUp { get; set; }
+    public bool WaveBeforeFinalWaveComingUp { get; set; }
+    public int CurrentScore { get; set; }
+    public int MaxScorePerNight { get; set; }
 }
 
 public sealed class KingDto
@@ -89,6 +100,26 @@ public sealed class LoadoutDto
 {
     public List<string> AsString { get; set; } = new();
     public int PerkPointsRemaining { get; set; }
+    public List<LoadoutItemDto> Catalog { get; set; } = new();
+    public List<QuestDto> Quests { get; set; } = new();
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public int? Worth { get; set; }
+}
+
+public sealed class LoadoutItemDto
+{
+    public string Name { get; set; } = "";
+    public string Kind { get; set; } = "";
+    public bool Locked { get; set; }
+    public bool Unlocked { get; set; }
+    public string Description { get; set; } = "";
+}
+
+public sealed class QuestDto
+{
+    public string Statement { get; set; } = "";
+    public bool Complete { get; set; }
 }
 
 public sealed class SlotDto
@@ -113,6 +144,15 @@ public sealed class SlotDto
     public SlotUnlocksDto Unlocks { get; set; } = new();
     public List<ChoiceDto> Choices { get; set; } = new();
     public CombatDto Combat { get; set; } = new();
+    public string Tooltip { get; set; } = "";
+    public string NextUpgradeLabel { get; set; } = "";
+    public SlotUnlockPreviewDto UnlockPreview { get; set; } = new();
+}
+
+public sealed class SlotUnlockPreviewDto
+{
+    public List<string> BuildingNames { get; set; } = new();
+    public List<int> SlotIds { get; set; } = new();
 }
 
 public sealed class HpDto
