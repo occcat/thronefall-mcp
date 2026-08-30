@@ -1,5 +1,5 @@
 using System;
-using System.Globalization;
+using System.Collections.Generic;
 using System.Reflection;
 using ThronefallControl.Dto;
 
@@ -42,6 +42,7 @@ public static class Loadout
     public static void Reset()
     {
         Runtime = null;
+        GameReflection.Reset();
     }
 
     public static LoadoutSelectResult Select(string name, string kind, bool dryRun = false)
@@ -132,68 +133,74 @@ public static class Loadout
 
         public bool IsUnlocked(string name, string kind)
         {
-            _ = kind;
-            var equippable = FindEquippable(name);
-            if (equippable == null)
-                return true;
+            foreach (var ui in EquippableUi(kind))
+            {
+                if (!GameReflection.NamesEqual(DisplayName(ui), name))
+                    continue;
+                return !IsLocked(ui);
+            }
 
-            var prop = equippable.GetType().GetProperty("IsUnlocked")
-                       ?? equippable.GetType().GetProperty("Locked");
-            if (prop == null)
-                return true;
-            var value = prop.GetValue(equippable);
-            if (prop.Name == "Locked" && value is bool locked)
-                return !locked;
-            return value is not bool b || b;
+            return true;
         }
 
         public bool TrySelect(string name, string kind, out string? error)
         {
-            error = ErrorCodes.UnsupportedInThisBuild;
-            var helper = Clr.Game("LoadoutUIHelper");
-            if (helper != null)
+            error = ErrorCodes.NotFound;
+            object? lockedHit = null;
+            foreach (var ui in EquippableUi(kind))
             {
-                foreach (var method in helper.GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.Instance))
+                if (!GameReflection.NamesEqual(DisplayName(ui), name))
+                    continue;
+                if (IsLocked(ui))
                 {
-                    if (method.Name != "TrySelectEquippableForLoadout")
-                        continue;
-                    var target = method.IsStatic ? null : Activator.CreateInstance(helper);
-                    var args = BindSelectArgs(method, name, kind);
-                    var invoked = method.Invoke(target, args);
-                    if (invoked is bool ok)
-                    {
-                        if (ok)
-                        {
-                            error = null;
-                            return true;
-                        }
+                    lockedHit = ui;
+                    continue;
+                }
 
-                        error = ErrorCodes.NotFound;
-                        return false;
-                    }
-
+                if (TryPick(ui))
+                {
                     error = null;
                     return true;
                 }
             }
 
-            if (TryPerkSelect(name))
-            {
-                error = null;
+            if (TrySelectPerkItem(name, kind, out error))
                 return true;
+
+            if (lockedHit != null)
+            {
+                error = ErrorCodes.NotFound;
+                return false;
             }
 
+            error = error ?? ErrorCodes.NotFound;
             return false;
         }
 
         public bool TryStartLevel(string sceneName, out string? error)
         {
             error = ErrorCodes.UnsupportedInThisBuild;
-            if (!TryBeginLevelInteractor(sceneName))
+            var player = GameReflection.Static("PlayerInteraction");
+            if (player == null)
                 return false;
 
-            var managerType = Clr.Game("LevelSelectManager");
-            var manager = managerType?.GetField("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var interactor = FindLevelInteractor(sceneName);
+            if (interactor == null)
+            {
+                error = ErrorCodes.NotFound;
+                return false;
+            }
+
+            if (!CanBePlayed(interactor))
+            {
+                error = ErrorCodes.IllegalPhase;
+                return false;
+            }
+
+            if (!BeginWithPlayer(interactor, player))
+                return false;
+
+            var manager = GameReflection.Static("LevelSelectManager");
             var play = manager?.GetType().GetMethod("PlayButtonPressed", Type.EmptyTypes);
             if (play == null)
                 return false;
@@ -202,151 +209,192 @@ public static class Loadout
             return true;
         }
 
-        static bool TryPerkSelect(string name)
+        static IEnumerable<object> EquippableUi(string kind)
         {
-            var groupType = Clr.Game("PerkSelectionGroup");
-            if (groupType == null)
+            foreach (var helper in GameReflection.Live("LoadoutUIHelper"))
+            {
+                if (helper == null)
+                    continue;
+                var lists = kind switch
+                {
+                    "weapon" => new[] { "weapons" },
+                    "perk" => new[] { "perks" },
+                    "mutator" => new[] { "mutators" },
+                    _ => new[] { "perks", "weapons", "mutators" }
+                };
+                foreach (var listName in lists)
+                {
+                    foreach (var item in GameReflection.Enumerate(GameReflection.Read(helper, listName)))
+                    {
+                        if (KindMatches(item, kind))
+                            yield return item;
+                    }
+                }
+            }
+
+            foreach (var ui in GameReflection.Live("TFUIEquippable"))
+            {
+                if (ui != null && KindMatches(ui, kind))
+                    yield return ui;
+            }
+        }
+
+        static bool TryPick(object ui)
+        {
+            var pick = ui.GetType().GetMethod("Pick", Type.EmptyTypes);
+            if (pick == null)
                 return false;
-            foreach (var method in groupType.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            pick.Invoke(ui, null);
+            return true;
+        }
+
+        static bool TrySelectPerkItem(string name, string kind, out string? error)
+        {
+            error = ErrorCodes.NotFound;
+            if (kind is not "" and not "perk")
+                return false;
+
+            object? item = null;
+            foreach (var candidate in GameReflection.Live("PerkSelectionItem"))
+            {
+                if (candidate == null)
+                    continue;
+                var data = GameReflection.Read(candidate, "Equippable", "equippable");
+                if (GameReflection.NamesEqual(GameReflection.Read(data, "displayName"), name) ||
+                    GameReflection.NamesEqual(DisplayName(candidate), name))
+                {
+                    item = candidate;
+                    break;
+                }
+            }
+
+            if (item == null)
+                return false;
+            if (IsLocked(item) || IsLocked(GameReflection.Read(item, "Equippable", "equippable") ?? item))
+                return false;
+
+            var group = GameReflection.Read(item, "perkSelectionGroup")
+                        ?? First(GameReflection.Live("PerkSelectionGroup"));
+            if (group == null)
+                return false;
+
+            foreach (var method in group.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public))
             {
                 if (method.Name != "SelectPerk")
                     continue;
                 var args = method.GetParameters();
-                if (args.Length == 1 && args[0].ParameterType == typeof(string))
-                {
-                    var target = method.IsStatic ? null : Activator.CreateInstance(groupType);
-                    method.Invoke(target, new object[] { name });
-                    return true;
-                }
+                if (args.Length != 1)
+                    continue;
+                if (args[0].ParameterType == typeof(string))
+                    continue;
+                if (!args[0].ParameterType.IsInstanceOfType(item))
+                    continue;
+                method.Invoke(group, new[] { item });
+                error = null;
+                return true;
             }
 
             return false;
         }
 
-        static bool TryBeginLevelInteractor(string sceneName)
+        static object? FindLevelInteractor(string sceneName)
         {
-            var type = Clr.Game("LevelInteractor");
-            var unityObject = Type.GetType("UnityEngine.Object, UnityEngine.CoreModule")
-                              ?? Type.GetType("UnityEngine.Object, UnityEngine");
-            if (type == null || unityObject == null)
-                return false;
-
-            object? found = null;
-            foreach (var method in unityObject.GetMethods(BindingFlags.Public | BindingFlags.Static))
+            var manager = GameReflection.Static("LevelSelectManager");
+            if (manager != null)
             {
-                if (method.Name != "FindObjectsOfType")
-                    continue;
-                var parameters = method.GetParameters();
-                try
+                foreach (var listName in new[] { "levelInteractors", "bonusLevelInteractors" })
                 {
-                    object? list;
-                    if (method.IsGenericMethod && parameters.Length == 0)
-                        list = method.MakeGenericMethod(type).Invoke(null, null);
-                    else if (parameters.Length == 1 && parameters[0].ParameterType == typeof(Type))
-                        list = method.Invoke(null, new object[] { type });
-                    else
-                        continue;
-
-                    if (list is not Array array)
-                        continue;
-                    foreach (var item in array)
+                    foreach (var item in GameReflection.Enumerate(GameReflection.Read(manager, listName)))
                     {
-                        if (item == null)
-                            continue;
-                        if (MatchesScene(item, sceneName) && CanBePlayed(item))
-                        {
-                            found = item;
-                            break;
-                        }
+                        if (MatchesScene(item, sceneName))
+                            return item;
                     }
-
-                    if (found != null)
-                        break;
-                }
-                catch
-                {
-                    // next overload
                 }
             }
 
-            if (found == null)
-                return false;
-            var begin = found.GetType().GetMethod("InteractionBegin", Type.EmptyTypes);
-            begin?.Invoke(found, null);
-            return begin != null;
-        }
-
-        static bool MatchesScene(object interactor, string sceneName)
-        {
-            foreach (var member in new[] { "sceneName", "SceneName", "levelName", "LevelName" })
+            foreach (var item in GameReflection.Live("LevelInteractor"))
             {
-                var value = interactor.GetType().GetField(member)?.GetValue(interactor)
-                            ?? interactor.GetType().GetProperty(member)?.GetValue(interactor);
-                if (value != null && string.Equals(Convert.ToString(value, CultureInfo.InvariantCulture), sceneName, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-
-            var info = interactor.GetType().GetProperty("LevelInfo")?.GetValue(interactor)
-                       ?? interactor.GetType().GetField("levelInfo")?.GetValue(interactor);
-            var infoName = info?.GetType().GetField("sceneName")?.GetValue(info)
-                           ?? info?.GetType().GetProperty("sceneName")?.GetValue(info);
-            return infoName != null &&
-                   string.Equals(Convert.ToString(infoName, CultureInfo.InvariantCulture), sceneName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        static bool CanBePlayed(object interactor)
-        {
-            var prop = interactor.GetType().GetProperty("CanBePlayed");
-            if (prop?.GetValue(interactor) is bool b)
-                return b;
-            return true;
-        }
-
-        static object? FindEquippable(string name)
-        {
-            var type = Clr.Game("Equippable") ?? Clr.Game("TFUIEquippable");
-            var unityObject = Type.GetType("UnityEngine.Object, UnityEngine.CoreModule")
-                              ?? Type.GetType("UnityEngine.Object, UnityEngine");
-            if (type == null || unityObject == null)
-                return null;
-            try
-            {
-                var find = unityObject.GetMethod("FindObjectsOfType", new[] { typeof(Type) });
-                if (find?.Invoke(null, new object[] { type }) is not Array array)
-                    return null;
-                foreach (var item in array)
-                {
-                    if (item == null)
-                        continue;
-                    var itemName = item.GetType().GetField("name")?.GetValue(item)
-                                   ?? item.GetType().GetProperty("name")?.GetValue(item)
-                                   ?? item.GetType().GetProperty("Name")?.GetValue(item);
-                    if (itemName != null &&
-                        string.Equals(Convert.ToString(itemName, CultureInfo.InvariantCulture), name, StringComparison.OrdinalIgnoreCase))
-                        return item;
-                }
-            }
-            catch
-            {
-                return null;
+                if (item != null && MatchesScene(item, sceneName))
+                    return item;
             }
 
             return null;
         }
 
-        static object?[] BindSelectArgs(MethodInfo method, string name, string kind)
+        static bool BeginWithPlayer(object interactor, object player)
         {
-            var ps = method.GetParameters();
-            var args = new object?[ps.Length];
-            for (var i = 0; i < ps.Length; i++)
+            MethodInfo? matched = null;
+            foreach (var method in interactor.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public))
             {
-                if (ps[i].ParameterType == typeof(string))
-                    args[i] = args[i] == null && Array.IndexOf(args, name) < 0 ? name : kind;
-                else if (ps[i].ParameterType.IsValueType)
-                    args[i] = Activator.CreateInstance(ps[i].ParameterType);
+                if (method.Name != "InteractionBegin")
+                    continue;
+                var args = method.GetParameters();
+                if (args.Length != 1)
+                    continue;
+                if (!args[0].ParameterType.IsInstanceOfType(player))
+                    continue;
+                matched = method;
+                break;
             }
 
-            return args;
+            if (matched == null)
+                return false;
+            matched.Invoke(interactor, new[] { player });
+            return true;
+        }
+
+        static bool MatchesScene(object interactor, string sceneName)
+        {
+            if (GameReflection.NamesEqual(GameReflection.Read(interactor, "sceneName", "SceneName"), sceneName))
+                return true;
+            var info = GameReflection.Read(interactor, "levelInfo", "LevelInfo");
+            return GameReflection.NamesEqual(GameReflection.Read(info, "sceneName", "SceneName"), sceneName);
+        }
+
+        static bool CanBePlayed(object interactor) =>
+            GameReflection.Read(interactor, "CanBePlayed") is not bool playable || playable;
+
+        static object? DisplayName(object ui)
+        {
+            var data = GameReflection.Read(ui, "Data", "equippableData", "Equippable", "equippable") ?? ui;
+            return GameReflection.Read(data, "displayName", "DisplayName");
+        }
+
+        static bool IsLocked(object ui)
+        {
+            if (GameReflection.Read(ui, "Locked") is bool locked)
+                return locked;
+            var data = GameReflection.Read(ui, "Data", "equippableData", "Equippable", "equippable");
+            if (GameReflection.Read(data, "IsUnlocked") is bool unlocked)
+                return !unlocked;
+            if (GameReflection.Read(data, "Locked") is bool dataLocked)
+                return dataLocked;
+            return false;
+        }
+
+        static bool KindMatches(object ui, string kind)
+        {
+            if (string.IsNullOrEmpty(kind))
+                return true;
+            var flag = kind switch
+            {
+                "perk" => GameReflection.Read(ui, "isPerk", "IsPerk"),
+                "weapon" => GameReflection.Read(ui, "isWeapon", "IsWeapon"),
+                "mutator" => GameReflection.Read(ui, "isMutator", "IsMutator"),
+                _ => null
+            };
+            return flag is not bool b || b;
+        }
+
+        static object? First(object?[] items)
+        {
+            foreach (var item in items)
+            {
+                if (item != null)
+                    return item;
+            }
+
+            return null;
         }
     }
 }

@@ -17,6 +17,7 @@
     <Compile Include="Game/IdRegistry.cs" />
     <Compile Include="Game/King.cs" />
     <Compile Include="Game/Loadout.cs" />
+    <Compile Include="Game/GameReflection.cs" />
   </ItemGroup>
 
   <ItemGroup>
