@@ -374,6 +374,8 @@ public readonly struct EntityId
 
 Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `needs_choice: true` + 分支列表，**不在同一请求里猜默认分支**。agent 再 `POST /slots/{id}/choice`。若 `IsWaitingForChoice` 仍为 false，插件最多等 4 帧（主线程 `yield` 式 pump，不阻塞 HTTP 超过 timeout）。
 
+要关掉当前选择而不点分支：`POST /slots/choice/cancel` 调 `ChoiceManager.instance.CancelChoice`。**不**开 CheatMenu，**不**走 `OnUpgradeChoiceComplete`。`!ChoiceBusy` 且没有 slot `IsWaitingForChoice` 时 409 `not_found`。
+
 ### 夜间策略（执行器，不是 AI）
 
 | policy | 插件做什么 | 插件不做什么 |
@@ -441,6 +443,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | POST | `/slots/{id}/build` | `day` | `TryToBuildOrUpgradeAndPay` |
 | POST | `/slots/{id}/upgrade` | `day` | 同上（语义别名） |
 | POST | `/slots/{id}/choice` | `day` | `OnUpgradeChoiceComplete` |
+| POST | `/slots/choice/cancel` | `day` | `ChoiceManager.CancelChoice`。没有进行中的 choice 时 409 `not_found`，不假装 `canceled=true` |
 | POST | `/night/call` | `day` 且 `IsFreeToCallNight` | `DayNightCycle.SwitchToNight` |
 | POST | `/units/command` | `day/night` | 派到世界点 |
 | POST | `/units/follow` | `day/night` | `FollowPlayer` |
@@ -683,6 +686,14 @@ Wave 预览（白天决策用）：`EnemySpawner.GetWaveInfoForNextWave()` → `
 ```
 
 调用 `BuildSlot.TryToBuildOrUpgradeAndPay()`。钱不够走游戏自己的失败路径，插件把结果映射为 `insufficient_gold`。`teleportKingNearby=true` 时先 `PlayerMovement.TeleportTo(slot.position)`（纯视觉，不是功能依赖）。
+
+`POST /slots/choice/cancel`
+
+```json
+{ "clientRequestId": "x1", "dryRun": false }
+```
+
+合法 phase 与 `/slots/{id}/choice` 相同（`day`）。成功 `200 { "ok": true, "canceled": true, "phase": "day", "generation": 4 }`，并按游戏 `CancelChoice` 语义清掉 `ChoiceBusy`。没有进行中的 choice（`!ChoiceBusy` 且没有 slot `IsWaitingForChoice`）→ `409 { "error": "not_found" }`，message 说明没有可取消的选择，不返回 `canceled=true`。`dryRun=true` 不调用 `CancelChoice`，返回 `would.action=cancel`。`clientRequestId` 走现有幂等缓存。切场景 → `409 transition_in_progress`。
 
 `POST /units/command`
 
