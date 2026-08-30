@@ -15,6 +15,10 @@
     <Compile Include="Config/**/*.cs" />
     <Compile Include="Game/MainThread.cs" />
     <Compile Include="Game/IdRegistry.cs" />
+    <Compile Include="Game/GameFacade.cs" />
+    <Compile Include="Game/ReflectionCache.cs" />
+    <Compile Include="Game/Spawns.cs" />
+    <Compile Include="Game/Units.cs" />
   </ItemGroup>
 
   <ItemGroup>
