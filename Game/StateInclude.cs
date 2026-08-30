@@ -1,6 +1,5 @@
 using System;
 using ThronefallControl.Dto;
-using NextWavePreview = ThronefallControl.Game.NextWave;
 
 namespace ThronefallControl.Game;
 
@@ -104,11 +103,7 @@ public sealed class StateInclude
         else dto.Spawns ??= new();
 
         if (!WantsNextWave) dto.NextWave = null;
-        else
-        {
-            dto.NextWave ??= new NextWaveDto();
-            dto.NextWave.Mouths = NextWavePreview.GroupByMouth(dto.NextWave.Groups);
-        }
+        else dto.NextWave ??= new NextWaveDto();
 
         if (!WantsLoadout) dto.Loadout = null;
         else dto.Loadout ??= new LoadoutDto();

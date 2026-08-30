@@ -590,6 +590,16 @@ public static class Observation
         return dto;
     }
 
+    /// <summary>
+    /// Rally for one spawn line using the same polyline + <see cref="Spawns.ComputeRally"/> as /state/spawns.
+    /// </summary>
+    public static Vec3Dto SuggestedRallyForLine(object line)
+    {
+        var castle = FindTagged("CastleCenter");
+        var castlePos = castle == null ? new Vec3Dto() : UnityAccess.PositionOf(castle);
+        return SuggestRally(ReadPolyline(line), castlePos, castle != null);
+    }
+
     static List<Vec3Dto> ReadPolyline(object line)
     {
         var points = new List<Vec3Dto>();
@@ -628,37 +638,14 @@ public static class Observation
 
     static Vec3Dto SuggestRally(List<Vec3Dto> polyline, Vec3Dto castle, bool hasCastle)
     {
-        if (polyline.Count == 0)
-            return new Vec3Dto();
-        if (!hasCastle)
-            return polyline[0];
+        var points = new List<WorldVec>(polyline.Count);
+        foreach (var p in polyline)
+            points.Add(WorldVec.FromDto(p));
 
-        var best = polyline[0];
-        var bestD = DistanceSq(best, castle);
-        for (var i = 1; i < polyline.Count; i++)
-        {
-            var d = DistanceSq(polyline[i], castle);
-            if (d < bestD)
-            {
-                bestD = d;
-                best = polyline[i];
-            }
-        }
-
-        var dx = best.X - castle.X;
-        var dy = best.Y - castle.Y;
-        var dz = best.Z - castle.Z;
-        var len = Math.Sqrt(dx * dx + dy * dy + dz * dz);
-        var offset = PluginConfig.WallBackOffset;
-        if (len < 0.001)
-            return best;
-        var s = offset / (float)len;
-        return new Vec3Dto
-        {
-            X = best.X + dx * s,
-            Y = best.Y + dy * s,
-            Z = best.Z + dz * s
-        };
+        return Spawns.ComputeRally(
+            points,
+            hasCastle ? WorldVec.FromDto(castle) : (WorldVec?)null,
+            PluginConfig.WallBackOffset).Point.ToDto();
     }
 
     static CombatDto ReadCombat(object? hp, object? host)
@@ -803,13 +790,5 @@ public static class Observation
         {
             return false;
         }
-    }
-
-    static float DistanceSq(Vec3Dto a, Vec3Dto b)
-    {
-        var dx = a.X - b.X;
-        var dy = a.Y - b.Y;
-        var dz = a.Z - b.Z;
-        return dx * dx + dy * dy + dz * dz;
     }
 }

@@ -128,6 +128,27 @@ public sealed class UnitsTests
     }
 
     [Fact]
+    public void Deploy_stale_id_fails_without_warping()
+    {
+        using var scope = new UnitTestScope();
+        var live = scope.World.AddUnit(1, "P Knight");
+        scope.World.StaleIds.Add(99);
+
+        var outcome = scope.Service.Deploy(
+            new[] { new UnitPick { Ids = { 1, 99 } } },
+            new WorldVec(5f, 0f, 5f),
+            hold: false,
+            spacing: 2f,
+            dryRun: false);
+
+        Assert.False(outcome.Ok);
+        Assert.Equal(ErrorCodes.StaleId, outcome.Error);
+        Assert.Equal(409, outcome.Status);
+        Assert.Equal(0f, live.Position.X);
+        Assert.False(live.Snapped);
+    }
+
+    [Fact]
     public void All_stale_ids_fail_with_stale_id()
     {
         using var scope = new UnitTestScope();

@@ -129,7 +129,7 @@ public sealed class McpClientTests
             },
             Template = new StateDto
             {
-                NextWave = new NextWaveDto
+                NextWave = MouthsFromGroups(new NextWaveDto
                 {
                     Available = true,
                     WaveNumber = 2,
@@ -148,7 +148,7 @@ public sealed class McpClientTests
                             Count = 3
                         }
                     }
-                }
+                })
             }
         };
         var previous = GameFacade.Current;
@@ -188,6 +188,12 @@ public sealed class McpClientTests
         {
             GameFacade.Current = previous;
         }
+    }
+
+    static NextWaveDto MouthsFromGroups(NextWaveDto dto)
+    {
+        dto.Mouths = NextWave.GroupByMouth(dto.Groups);
+        return dto;
     }
 
     sealed class FakeNextWaveWorld : IWorld
