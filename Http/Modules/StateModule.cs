@@ -13,6 +13,7 @@ public sealed class StateModule : IRouteModule
         router.Map("GET", "/state/units", ctx => GetSlice(ctx, StateInclude.Units));
         router.Map("GET", "/state/enemies", ctx => GetSlice(ctx, StateInclude.Enemies));
         router.Map("GET", "/state/spawns", ctx => GetSlice(ctx, StateInclude.Spawns));
+        router.Map("GET", "/state/next-wave", ctx => GetSlice(ctx, StateInclude.NextWave));
         router.Map("GET", "/state/loadout", ctx => GetSlice(ctx, StateInclude.Loadout));
     }
 
