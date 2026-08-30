@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ThronefallControl.Dto;
 
@@ -57,14 +58,76 @@ public static class NextWave
             // GetNextWave succeeded; do not fabricate mouths if the rest fails.
         }
 
+        dto.Mouths = GroupByMouth(dto.Groups);
         return dto;
+    }
+
+    public static List<NextWaveMouthDto> GroupByMouth(IEnumerable<NextWaveGroupDto>? groups)
+    {
+        var mouths = new List<NextWaveMouthDto>();
+        if (groups == null)
+            return mouths;
+
+        var byKey = new Dictionary<string, NextWaveMouthDto>(StringComparer.Ordinal);
+        foreach (var group in groups)
+        {
+            if (group == null)
+                continue;
+
+            var spawn = group.Spawn ?? new EntityId { Kind = "spawn" };
+            var key = spawn.InstanceId != 0
+                ? "id:" + spawn.InstanceId
+                : "name:" + (spawn.Name ?? "");
+
+            if (!byKey.TryGetValue(key, out var mouth))
+            {
+                mouth = new NextWaveMouthDto
+                {
+                    Spawn = spawn,
+                    SuggestedRally = group.SuggestedRally ?? new Vec3Dto()
+                };
+                byKey[key] = mouth;
+                mouths.Add(mouth);
+            }
+
+            NextWaveMouthEnemyDto? found = null;
+            var enemyName = group.EnemyName ?? "";
+            foreach (var enemy in mouth.Enemies)
+            {
+                if (string.Equals(enemy.Name, enemyName, StringComparison.Ordinal) &&
+                    enemy.Elite == group.Elite)
+                {
+                    found = enemy;
+                    break;
+                }
+            }
+
+            if (found != null)
+            {
+                found.Count += group.Count;
+                continue;
+            }
+
+            mouth.Enemies.Add(new NextWaveMouthEnemyDto
+            {
+                Name = enemyName,
+                Count = group.Count,
+                Elite = group.Elite,
+                GoldCoins = group.GoldCoins,
+                Delay = group.Delay,
+                Interval = group.Interval
+            });
+        }
+
+        return mouths;
     }
 
     static NextWaveDto Unavailable() => new()
     {
         Available = false,
         Groups = new List<NextWaveGroupDto>(),
-        Enemies = new List<NextWaveEnemyDto>()
+        Enemies = new List<NextWaveEnemyDto>(),
+        Mouths = new List<NextWaveMouthDto>()
     };
 
     static Dictionary<int, Vec3Dto> IndexRallies(IdRegistry ids)
