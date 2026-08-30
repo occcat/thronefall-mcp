@@ -164,6 +164,21 @@ public sealed class LoadoutCatalogTests : IDisposable
     }
 
     [Fact]
+    public void Fill_reads_pascal_case_Quests_property()
+    {
+        var info = new LevelInfoWithQuestsProperty();
+        info.Quests.Add(new Quest { statement = "Beat the level" });
+
+        var fromRead = LoadoutCatalog.ReadQuests(info);
+        Assert.Equal("Beat the level", Assert.Single(fromRead).Statement);
+
+        var dto = new LoadoutDto();
+        LoadoutCatalog.Fill(dto, info);
+        Assert.Equal("Beat the level", Assert.Single(dto.Quests).Statement);
+        Assert.False(string.IsNullOrWhiteSpace(dto.Quests[0].Statement));
+    }
+
+    [Fact]
     public void MapQuest_reads_statement_and_check_beaten()
     {
         var quest = new Quest { statement = "Beat without mutators", beaten = true };
@@ -230,6 +245,12 @@ public sealed class LoadoutCatalogTests : IDisposable
             _ = include;
             _ = facade;
         }
+    }
+
+    sealed class LevelInfoWithQuestsProperty
+    {
+        readonly List<Quest> _quests = new();
+        public List<Quest> Quests => _quests;
     }
 
     sealed class EquippablePerk

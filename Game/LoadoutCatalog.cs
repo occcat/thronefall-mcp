@@ -14,7 +14,7 @@ public static class LoadoutCatalog
         public string Description { get; set; } = "";
     }
 
-    public static void Fill(LoadoutDto dto)
+    public static void Fill(LoadoutDto dto, object? levelInfo = null)
     {
         if (dto == null)
             return;
@@ -22,7 +22,7 @@ public static class LoadoutCatalog
         catch { dto.Catalog ??= new List<LoadoutItemDto>(); }
         try { dto.Worth = ReadWorth(); }
         catch { dto.Worth = null; }
-        try { dto.Quests = ReadQuests(); }
+        try { dto.Quests = levelInfo != null ? ReadQuests(levelInfo) : ReadQuestsFromScene(); }
         catch { dto.Quests ??= new List<QuestDto>(); }
     }
 
@@ -97,6 +97,23 @@ public static class LoadoutCatalog
         return dto;
     }
 
+    public static List<QuestDto> ReadQuests(object? info, object? levelData = null)
+    {
+        var list = new List<QuestDto>();
+        if (info == null)
+            return list;
+        var raw = GetMember(info, "Quests", "_quests", "quests");
+        var data = levelData ?? UnityAccess.Get(info, "LevelData");
+        foreach (var quest in UnityAccess.Enumerate(raw))
+        {
+            var mapped = MapQuest(quest, data);
+            if (mapped != null)
+                list.Add(mapped);
+        }
+
+        return list;
+    }
+
     static List<LoadoutItemDto> ReadCatalog()
     {
         var fromHelper = ReadFromHelper();
@@ -154,24 +171,28 @@ public static class LoadoutCatalog
         catch { return null; }
     }
 
-    static List<QuestDto> ReadQuests()
+    static List<QuestDto> ReadQuestsFromScene()
     {
-        var list = new List<QuestDto>();
         var lpm = UnityAccess.Singleton("LevelProgressManager");
         var info = UnityAccess.Call(lpm, "GetLevelInfoFromCurrentSceneName")
                    ?? UnityAccess.Call(lpm, "GetLevelInfoFromSceneName", UnityAccess.ActiveSceneName());
         if (info == null)
-            return list;
+            return new List<QuestDto>();
         var data = UnityAccess.Get(info, "LevelData")
                    ?? UnityAccess.Call(lpm, "GetLevelDataForActiveScene");
-        foreach (var quest in UnityAccess.Enumerate(UnityAccess.Get(info, "quests")))
+        return ReadQuests(info, data);
+    }
+
+    static object? GetMember(object? obj, params string[] names)
+    {
+        foreach (var name in names)
         {
-            var mapped = MapQuest(quest, data);
-            if (mapped != null)
-                list.Add(mapped);
+            var value = UnityAccess.Get(obj, name);
+            if (value != null)
+                return value;
         }
 
-        return list;
+        return null;
     }
 
     static bool IsLocked(object? ui, object? data)

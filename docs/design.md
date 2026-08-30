@@ -564,7 +564,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | `level.*` | `LevelProgressManager.instance.GetLevelDataForActiveScene()` + `LevelInfo.sceneName` |
 | `loadout.asString` | `MatchSave.currentLoadoutAsString`（经 `MatchSaveLoadHandler.CurrentSave`）；空则 `PerkManager.CurrentlyEquipped.displayName` |
 | `loadout.catalog` | 选图/菜单：`LoadoutUIHelper.perks/weapons/mutators`（`TFUIEquippable.Data.displayName`、`isPerk/isWeapon/isMutator`、`Locked` / `Equippable.IsUnlocked`、`description`）。局内：`PerkManager.allEquippables`，空则 `CurrentlyEquipped`；kind 由 `EquippablePerk/Weapon/Mutation` 运行时类型推断。读失败保持 `[]` |
-| `loadout.quests` | `LevelProgressManager.GetLevelInfoFromCurrentSceneName().quests`：`Quest.GetMissionStatement()`，`CheckBeaten(LevelData)` 读得到则填 `complete`，否则 `false` |
+| `loadout.quests` | `LevelProgressManager.GetLevelInfoFromCurrentSceneName().Quests`（回退 `_quests` / `quests`）：`Quest.GetMissionStatement()`，`CheckBeaten(LevelData)` 读得到则填 `complete`，否则 `false` |
 | `loadout.worth` | `LoadoutUIHelper.LoadoutWorth`；读不到则 `null` 且 JSON 省略 |
 | `resetUnitFormationEveryMorning` | `SettingsManager.Instance.ResetUnitFormationEveryMorning` |
 
