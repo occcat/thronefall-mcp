@@ -31,6 +31,14 @@ public sealed class HarvestResponse
     public List<int> SlotIds { get; set; } = new();
 }
 
+public sealed class CancelChoiceResponse
+{
+    public bool Ok { get; set; } = true;
+    public bool Canceled { get; set; }
+    public string Phase { get; set; } = "";
+    public int Generation { get; set; }
+}
+
 public sealed class SlotMutateResponse
 {
     public bool Ok { get; set; } = true;
