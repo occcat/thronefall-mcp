@@ -119,7 +119,7 @@ home 被吸飞了，另挑**同一条行为对应的路**，不要统一收回�
 2. 按战略决定买什么：城堡是失败条件，先看它的 `hp` / `level` / 下一档。终夜只买兵和防。L1 兵营/箭塔/英雄营用 choice 英文名选兵（`Knights`、`Fire Archers`、`Hunters`…）。`needsChoice` 立刻 `POST /slots/{id}/choice`，选错了 cancel，不要留下未选。无 choice 可并行。类型对不上就换兵种或换岗。
 3. **只在 `day` 派兵，按战术落点。** 多口、要点名：`include=units` 取 id，再 `thronefall_units_command`（`selector.ids` + `target` + `"hold": false`）。整类上一口：`thronefall_units_send_to_spawn`。按数量落点：`thronefall_units_deploy`（只用于单点；分口不要用 count）。分组用 `POST /units/groups`。`settings.resetUnitFormationEveryMorning` 为 true 时每个白天重派。
 4. 写两三句国王建议（见下）。**先查余额并循环花钱**（见战略），再 `thronefall_night_call`。不要问用户要不要召夜。白天即可召。开夜后不要再派兵，夜里不要改 Home。夜里看场用 `include=enemies,units`。口只认当天的 `mouths[]`。
-5. **夜结束后写 `.experience`。** `phase` 回到 `day` 或变成 `end_screen` 时，把教训追加到本 skill 目录的 `.experience`（不要提交；已在仓库 `.gitignore`）。只写以后换图还能用的判断：威胁类型、花钱对错、落点规则、接口坑。不要写对局流水账，不要把某张图的坐标写成下次默认岗。下一白天先扫一遍再决策。
+5. **夜结束后写 `.experience/`。** `phase` 回到 `day` 或变成 `end_screen` 时，把教训写到本 skill 目录的 `.experience/`（不要提交；已在仓库 `.gitignore`）。文件名用当地时间 `YYYY-MM-DD-HHMM.md`；同一把对局追加到该文件，换一把再开新文件。开局先扫该目录。只写以后换图还能用的判断：威胁类型、花钱对错、落点规则、接口坑。不要写对局流水账，不要把某张图的坐标写成下次默认岗。下一白天先扫一遍再决策。
 
 ## 国王建议
 
