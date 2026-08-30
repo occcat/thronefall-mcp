@@ -15,11 +15,8 @@ public static class NextWave
         object? wave;
         try
         {
-            var spawner = UnityAccess.Singleton("EnemySpawner");
-            if (spawner == null)
-                return Unavailable();
-
-            wave = UnityAccess.Call(spawner, "GetNextWave");
+            // GetNextWave / GetWaveInfoForNextWave are static on EnemySpawner.
+            wave = UnityAccess.CallStatic("EnemySpawner", "GetNextWave");
             if (wave == null)
                 return Unavailable();
         }
@@ -48,7 +45,7 @@ public static class NextWave
                 }
             }
 
-            var info = UnityAccess.Call(UnityAccess.Singleton("EnemySpawner"), "GetWaveInfoForNextWave")
+            var info = UnityAccess.CallStatic("EnemySpawner", "GetWaveInfoForNextWave")
                        ?? UnityAccess.Call(wave, "GetWaveInfo");
             if (info != null)
                 FillInfo(dto, info);
