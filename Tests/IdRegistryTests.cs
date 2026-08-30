@@ -19,6 +19,8 @@ public sealed class IdRegistryTests
         Assert.True(ids.TryResolve(id.InstanceId, id.Generation, out var found, out var error));
         Assert.Same(marker, found);
         Assert.Null(error);
+        Assert.True(ids.TryResolve(id, out found, out error));
+        Assert.Same(marker, found);
     }
 
     [Fact]

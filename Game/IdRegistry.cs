@@ -28,6 +28,9 @@ public sealed class IdRegistry
         return id;
     }
 
+    public bool TryResolve(EntityId id, out object? target, out string? error) =>
+        TryResolve(id.InstanceId, id.Generation, out target, out error);
+
     public bool TryResolve(int instanceId, int generation, out object? target, out string? error)
     {
         target = null;
@@ -46,6 +49,18 @@ public sealed class IdRegistry
 
         target = entry.Target;
         return true;
+    }
+
+    public bool TryGet(int instanceId, out EntityId id)
+    {
+        if (_entries.TryGetValue(instanceId, out var entry))
+        {
+            id = entry.Id;
+            return true;
+        }
+
+        id = default!;
+        return false;
     }
 
     public bool TryResolve<T>(int instanceId, int generation, out T? target, out string? error)
