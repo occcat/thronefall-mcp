@@ -25,6 +25,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void Update()
     {
+        RuntimeState.RefreshFromGame();
         MainThread.Current?.Pump();
     }
 

@@ -20,6 +20,15 @@ public sealed class LoadoutTests : IDisposable
     }
 
     [Fact]
+    public void RefreshFromGame_is_noop_without_assembly_csharp()
+    {
+        RuntimeState.Phase = Phases.Day;
+        RuntimeState.RefreshFromGame();
+        Assert.Equal(Phases.Day, RuntimeState.Phase);
+        Assert.False(RuntimeState.Transitioning);
+    }
+
+    [Fact]
     public void Select_in_day_is_illegal_phase()
     {
         RuntimeState.Phase = Phases.Day;
