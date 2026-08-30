@@ -255,6 +255,7 @@ public static class Observation
         }
 
         dto.PerkPointsRemaining = ReadPerkPointsRemaining();
+        LoadoutCatalog.Fill(dto);
         return dto;
     }
 
