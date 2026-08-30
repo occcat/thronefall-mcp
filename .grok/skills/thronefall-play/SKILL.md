@@ -21,16 +21,16 @@ description: 代操 Thronefall。战略判断局面，战术走已发布 HTTP / 
 
 - 不要点游戏。不要开作弊，不要打 `/debug/*`。
 - **不要瞬移国王。** 不调 `thronefall_king_teleport` / `/king/teleport`，不用 `afk_castle`，建造不带 `teleportKingNearby`。收税用 `thronefall_harvest`。
+- **小兵不要固守。** `/units/command`、`/units/send-to-spawn`、`/units/deploy` 的 API 默认 `hold=true`；本局一律显式传 `"hold": false`。不要 `/units/hold`，不要 `/units/follow` 把整队绑到国王。
 - HTTP 看 `nextWave.available` / `nextWave.mouths[]`；MCP 还会抄到顶层 `available` / `mouths`。只看 `mouths[]`：`spawn`、`suggestedRally`、`mouths[].enemies[]`。不要用顶层 `enemies[]` 或扁的 `groups[]`。不要编口。`/state/spawns` 是全图线，不是今晚。
-- `POST /night/policy` 只用 `human`。
-- 不要问用户要不要召夜。召夜前必须按当晚武器、perk 和 `mouths[]` 用两三句告诉用户国王怎么打，然后立刻 `thronefall_night_call`。开夜后不要再派兵。夜里不要改 Home。
+- `POST /night/policy` 只用 `human`。`scripted_posts` 只记 intent，不派兵。不要 `afk_castle`。
+- 不要问用户要不要召夜。白天即可召，不要求 `isFreeToCallNight`。召夜前必须按当晚武器、perk 和 `mouths[]` 用两三句告诉用户国王怎么打，然后立刻 `thronefall_night_call`。开夜后不要再派兵。夜里不要改 Home。
 - Slot POST 不要带 `/state` 的 generation。`needsChoice` 立刻 `POST /slots/{id}/choice`，选错了用 `thronefall_slot_choice_cancel`，不要留下未选。
-- 黎明会重置阵型。不要写对局流水账文件，除非用户要。
+- `settings.resetUnitFormationEveryMorning` 为 true 时黎明会清 Home。不要写对局流水账文件，除非用户要。
 
 ## 工具
 
 优先走 MCP。没有对应工具的路径用 HTTP。
-
 
 | 工具                               | HTTP                                     | 用途                                                                                       |
 | -------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -41,8 +41,9 @@ description: 代操 Thronefall。战略判断局面，战术走已发布 HTTP / 
 | `thronefall_slot_upgrade`        | `POST /slots/{id}/upgrade`               | 建造/升级                                                                                    |
 | `thronefall_slot_choice_cancel`  | `POST /slots/choice/cancel`              | 取消进行中的升级选择。无选择 → 409 `not_found`                                                         |
 | `thronefall_night_call`          | `POST /night/call`                       | 召夜。不跳波                                                                                   |
-| `thronefall_units_command`       | `POST /units/command`                    | 把单位 Home 写到世界点                                                                           |
+| `thronefall_units_command`       | `POST /units/command`                    | `WarpTo` 到世界点；响应仍报 `path=fallback`                                                       |
 | `thronefall_units_send_to_spawn` | `POST /units/send-to-spawn`              | 按类型派到某条 spawn 线的集结                                                                       |
+| `thronefall_units_deploy`        | `POST /units/deploy`                     | 按种类/数量或 id 瞬移到世界点                                                                       |
 | `thronefall_path_toggle`         | `POST /path/toggle`                      | 开/关开路器                                                                                   |
 | `thronefall_loadout_select`      | `POST /loadout/select`                   | 选图装备 perk/武器/突变                                                                          |
 | `thronefall_level_start`         | `POST /level/start`                      | 选图开局                                                                                     |
@@ -50,7 +51,7 @@ description: 代操 Thronefall。战略判断局面，战术走已发布 HTTP / 
 
 有工具但本局不用：`thronefall_king_teleport`。
 
-HTTP 有、MCP 未单独包的：`POST /slots/{id}/build`、`POST /slots/{id}/choice`、`POST /units/groups`、`GET /state/training`、`GET /state/slots|units|enemies|spawns|loadout`。
+HTTP 有、MCP 未单独包的：`POST /slots/{id}/build`（与 upgrade 同义）、`POST /slots/{id}/choice`、`POST /units/groups`、`GET /state/training`、`GET /state/slots|units|enemies|spawns|loadout`。MCP 有 `thronefall_units_deploy`（`POST /units/deploy`：`picks` / `target` / `hold` / `spacing=2`）。
 
 ## 战术
 
@@ -76,10 +77,11 @@ HTTP 有、MCP 未单独包的：`POST /slots/{id}/build`、`POST /slots/{id}/ch
 
 phase 必须 `day`：
 
-- 多口、要点名到人：`include=units` 取 `id.instanceId` / `typeName`，再 `thronefall_units_command`（`selector.ids` + `target` + `"hold": false`）。一口一次。
+- 多口、要点名到人：`include=units` 取 `id.instanceId` / `typeName`，再 `thronefall_units_command`（`selector.ids` + `target` + `"hold": false`）。一口一次。command 会 `WarpTo`，响应仍报 `path=fallback`。
 - 整类上一口：`thronefall_units_send_to_spawn`（`typeName` + `spawnId` = `mouths[].spawn.instanceId`，`"hold": false`）。
+- 按种类/数量瞬移：`thronefall_units_deploy`（`picks` + `target` + `"hold": false` + `spacing` 默认 2）。
 
-`/units/command` 只改 Home。需要分组再用 `POST /units/groups`。黎明重置 Home，**每个白天重派**。
+需要分组再用 `POST /units/groups`。`settings.resetUnitFormationEveryMorning` 为 true 时黎明会清 Home，**每个白天重派**。
 
 ### 当晚国王建议
 

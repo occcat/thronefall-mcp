@@ -85,10 +85,11 @@ HTTP 模块测 mutate 时：注入可 `Pump` 的 `MainThread` 实例，不要碰
 
 - `include=slots,units,spawns` 的 JSON 不得含 `nextWave`。
 - `include=nextWave` 或 `GET /state/next-wave` 在 day 返回 200 且含 `available`。
-- FakeWorld 设 `Available=false` 时 JSON `available=false`，不得编造 `groups`。
+- FakeWorld 设 `Available=false` 时 JSON `available=false`，不得编造 `groups` / `mouths`。
 - menu 下 `GET /state/next-wave` → 409 `illegal_phase`。
 - 空 include（All）时 `nextWave` 非 null。
 - 无 `EnemySpawner` 时 `NextWave.Read` 为 `available=false`、空列表。
+- 排兵核对 **`mouths[].enemies`**（种类 + 数量 + elite），不要只看顶层 `groups` 或 `enemies[]`。
 
 ---
 
@@ -103,7 +104,7 @@ HTTP 模块测 mutate 时：注入可 `Pump` 的 `MainThread` 实例，不要碰
 | 步骤 | 命令 | 期望 |
 | --- | --- | --- |
 | 存活 | `curl -s http://127.0.0.1:17891/health` | 200，`ok=true`，`plugin=ThronefallControl`，`cheatsEnabled=false`。进程刚起来、尚在菜单也可以。 |
-| 健康 ready | 同一 URL；实现若区分 alive/ready，ready 进主线程填 `phase` / `scene` / `generation` | 局内 `phase` 为 `menu` / `level_select` / `day` / `night` / `end_screen` / `transition` 之一。 |
+| 健康 ready | `curl -s http://127.0.0.1:17891/health/ready` | 进主线程填 `phase` / `scene` / `generation`。局内 `phase` 为 `menu` / `level_select` / `day` / `night` / `end_screen` / `transition` 之一。 |
 | 状态 | `curl -s 'http://127.0.0.1:17891/state'` | 200，含 `generation`、`phase`、`economy`、`clock`、`king`。`clock` 含 `finalWaveComingUp` / `preFinalWaveComingUp` / `waveBeforeFinalWaveComingUp` / `currentScore` / `maxScorePerNight`（读不到则为 0）。默认 All 含 `training`。 |
 | 裁剪 | `curl -s 'http://127.0.0.1:17891/state?include=slots,units,spawns'` | 未请求的大数组可空或缺省（含 `training`）；主线程 < 50 ms（看日志）。 |
 | OpenAPI | `curl -s http://127.0.0.1:17891/openapi.json` | 200，OpenAPI 3 文档。 |
@@ -131,7 +132,7 @@ curl -s http://127.0.0.1:17891/state/loadout
 | `/state/training` | day / night | 每条有 `slotId`（`myBuildSlot` instanceId）、`buildingName`、`hasKnockedOut`、`timeTillNextRespawn`。菜单 409。`include=slots` 的 JSON 无 `training`。 |
 | `/state/enemies` | day / night | 白天 count 可为 0；夜间有波次时 count>0，无投射物字段。 |
 | `/state/spawns` | day / night | 地图全部出线。`polyline` 非空；`suggestedRally` 为插件计算。**不是**今晚入口。 |
-| `/state/next-wave` | day / night | 今晚预览。`available=true` 时只用 `groups` 里的 named rally；`available=false` 则空 groups，不要当全图 8 条线。菜单打此路径应 409 `illegal_phase`。 |
+| `/state/next-wave` | day / night | 今晚预览。`available=true` 时排兵看 **`mouths[].enemies`**（及该口 `suggestedRally`），不要只看 `groups` 或顶层 `enemies[]`；`available=false` 则空 `groups` / `mouths`，不要当全图线。菜单打此路径应 409 `illegal_phase`。 |
 | `/state/loadout` | menu / level_select / day / night | `asString` 与当前 perk/武器一致。 |
 
 菜单里打 `/state/slots` 或 `/state/training` 应 `illegal_phase`（以设计：合法 phase 外拒绝为准）。
@@ -205,8 +206,8 @@ curl -s -X POST http://127.0.0.1:17891/path/toggle \
 
 | 检查 | 期望 |
 | --- | --- |
-| 白天且 `isFreeToCallNight=true` | 进入 night，`clock.timestate=Night`。 |
-| 白天但未收完税 / 不能 call | 409，不入夜。 |
+| 白天（`phase=day`） | 200，进入 night，`clock.timestate=Night`。不检查 `IsFreeToCallNight`。 |
+| `economy.isFreeToCallNight` | 只作观察字段；true/false 都不挡 `/night/call`。 |
 | 已是 night 再 call | `illegal_phase`。 |
 | 默认不跳波 | 不得调用 `EnemySpawner.DebugSkipWave`。 |
 | 开路器 | `pathOpened` 翻转，扣 `toggleCost`；`toogleOnlyAtDay` 的 cutter 夜晚拒绝。 |
@@ -233,11 +234,16 @@ curl -s -X POST http://127.0.0.1:17891/units/groups \
 curl -s -X POST http://127.0.0.1:17891/units/send-to-spawn \
   -H 'Content-Type: application/json' \
   -d '{"clientRequestId":"u-5","typeName":"P Knight","spawnId":SPAWN,"hold":true}'
+
+curl -s -X POST http://127.0.0.1:17891/units/deploy \
+  -H 'Content-Type: application/json' \
+  -d '{"clientRequestId":"u-6","picks":[{"typeName":"P Knight","count":3}],"target":{"x":12,"y":0,"z":-3},"hold":true,"spacing":2}'
 ```
 
 | 检查 | 期望 |
 | --- | --- |
-| fallback（`UseCommandUnitsSolver=false`） | 单位 `homePosition` 靠近目标，`holdPosition=true`，站在 navmesh 上。 |
+| command（`UseCommandUnitsSolver=false`） | 单位被 `WarpTo` 到目标附近，`holdPosition` 跟请求（API 默认 `true`），响应 `path=fallback`。 |
+| deploy | `picks` 点名的单位 `WarpTo` 到 `target`，沿 X 按 `spacing`（默认 2）排开，响应 `path=warp`。 |
 | solver 关闭时 `useSolver=true` | 仍走 fallback 或明确返回未启用，不得崩。 |
 | 过期 unit id | `stale_id`，其它单位仍可执行。 |
 | send-to-spawn | 落在 spawn 折线朝城堡一侧、墙外（`WallBackOffset` 默认 3）。 |
@@ -269,7 +275,7 @@ curl -s -X POST http://127.0.0.1:17891/level/start \
 | 路径 | 合法 phase | 核对 |
 | --- | --- | --- |
 | `POST /king/teleport` | day / night / level_select | `castle` / `start` / 坐标；默认不 `MakeInvulerable`。 |
-| `POST /night/policy` | day / night | `human`：不传送、不改 hold。`afk_castle`：国王到城堡。`scripted_posts`：按 spawn rally 派遣。策略立即执行一次。 |
+| `POST /night/policy` | day / night | `human`：不传送、不改 hold。`afk_castle`：国王到城堡。`scripted_posts`：只记 intent，不派兵。 |
 | `POST /loadout/select` | level_select | 未解锁装备拒绝；`/state/loadout` 更新。 |
 | `POST /level/start` | level_select | 走 `LevelInteractor` + `PlayButtonPressed`，不要自己 `LoadScene`。随后 `/health.phase` 经 `transition` 到 `day`。 |
 

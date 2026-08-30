@@ -17,30 +17,8 @@ public sealed class UnitsModule : IRouteModule
         router.Map("POST", "/units/deploy", ctx => Handle(ctx, Deploy));
     }
 
-    static HttpResponse Handle(RequestContext ctx, Func<RequestContext, UnitCommandOutcome> work)
-    {
-        var mt = MainThread.Current;
-        if (mt == null)
-            return ToHttp(Safe(ctx, work));
-
-        try
-        {
-            return ToHttp(mt.Run(() => Safe(ctx, work)).GetAwaiter().GetResult());
-        }
-        catch (AggregateException ex) when (ex.InnerException is MainThreadTimeoutException)
-        {
-            return Json.Error(504, ErrorCodes.MainThreadTimeout, "main_thread_timeout");
-        }
-        catch (MainThreadTimeoutException)
-        {
-            return Json.Error(504, ErrorCodes.MainThreadTimeout, "main_thread_timeout");
-        }
-        catch (Exception ex)
-        {
-            var inner = ex is AggregateException ag ? ag.InnerException ?? ex : ex;
-            return Json.Error(500, ErrorCodes.UnityException, inner.Message);
-        }
-    }
+    static HttpResponse Handle(RequestContext ctx, Func<RequestContext, UnitCommandOutcome> work) =>
+        MutateHttp.OnMainThread(() => ToHttp(Safe(ctx, work)));
 
     static UnitCommandOutcome Safe(RequestContext ctx, Func<RequestContext, UnitCommandOutcome> work)
     {

@@ -1,7 +1,9 @@
 using ThronefallControl.Dto;
 using ThronefallControl.Game;
 using ThronefallControl.Http;
+using ThronefallControl.Tests.Fakes;
 using Xunit;
+using static ThronefallControl.Tests.Fakes.ObservationFakeWorld;
 
 namespace ThronefallControl.Tests;
 
@@ -11,7 +13,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Include_without_nextWave_omits_it_from_json()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state?include=slots,units,spawns"));
@@ -25,7 +27,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Include_nextWave_in_day_returns_available()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state?include=nextWave"));
@@ -41,7 +43,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Slice_next_wave_in_day_returns_available()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state/next-wave"));
@@ -62,7 +64,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Unavailable_preview_does_not_fabricate_groups()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         world.Template.NextWave = new NextWaveDto { Available = false };
         using var _ = Push(new GameFacade(world));
@@ -81,7 +83,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Slice_next_wave_in_menu_is_illegal_phase()
     {
-        var world = new FakeWorld { HintsValue = Menu() };
+        var world = new ObservationFakeWorld { HintsValue = Menu() };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state/next-wave"));
@@ -95,7 +97,7 @@ public sealed class NextWaveTests
     [Fact]
     public void All_include_keeps_nextWave()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         var dto = new GameFacade(world).GetState();
         Assert.NotNull(dto.NextWave);
@@ -160,7 +162,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Night_allows_next_wave_slice()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels", timestate: "Night") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels", timestate: "Night") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state/next-wave"));
@@ -168,21 +170,64 @@ public sealed class NextWaveTests
         Assert.True(Json.Deserialize<StateDto>(res.Body)!.NextWave!.Available);
     }
 
-    static WorldHints Menu() => new()
+    [Fact]
+    public void IndexRallies_matches_ComputeRally_and_full_snapshot_for_same_spawnLine()
     {
-        SceneName = "_StartMenu",
-        SceneState = "MainMenu"
-    };
+        var castle = new WorldVec(0f, 0f, 0f);
+        const float offset = 3f;
+        var tonight = new WorldVec[] { new(20f, 0f, 0f), new(24f, 0f, 8f) };
+        var unused = new WorldVec[] { new(100f, 0f, 0f), new(110f, 0f, 0f) };
+        Func<WorldVec, float, bool> walls = (p, _) => p.X <= 20.1f;
 
-    static WorldHints InGame(string scene, string timestate = "Day") => new()
+        var snapshot = NextWave.IndexRallies(
+            new (int, IReadOnlyList<WorldVec>)[] { (11, tonight), (22, unused) },
+            castle,
+            offset,
+            walls);
+        var indexed = NextWave.IndexRallies(
+            new (int, IReadOnlyList<WorldVec>)[] { (11, tonight) },
+            castle,
+            offset,
+            walls);
+        var compute = Spawns.ComputeRally(tonight, castle, offset, walls).Point.ToDto();
+
+        Assert.Single(indexed);
+        Assert.False(indexed.ContainsKey(22));
+        Assert.Equal(snapshot[11].X, indexed[11].X, 3);
+        Assert.Equal(snapshot[11].Y, indexed[11].Y, 3);
+        Assert.Equal(snapshot[11].Z, indexed[11].Z, 3);
+        Assert.Equal(compute.X, indexed[11].X, 3);
+        Assert.Equal(compute.Y, indexed[11].Y, 3);
+        Assert.Equal(compute.Z, indexed[11].Z, 3);
+        Assert.Equal(23f, indexed[11].X, 3);
+        Assert.Equal(0f, indexed[11].Z, 3);
+    }
+
+    [Fact]
+    public void IndexRallies_without_wall_matches_ComputeRally_closest_on_polyline()
     {
-        SceneName = scene,
-        SceneState = "InGame",
-        Timestate = timestate,
-        MatchState = "InMatch"
-    };
+        var castle = new WorldVec(0f, 0f, 0f);
+        var line = new WorldVec[] { new(20f, 0f, 0f), new(24f, 0f, 8f) };
+        var indexed = NextWave.IndexRallies(
+            new (int, IReadOnlyList<WorldVec>)[] { (7, line) },
+            castle,
+            wallBackOffset: 3f);
+        var compute = Spawns.ComputeRally(line, castle, 3f).Point;
 
-    static void Fill(FakeWorld world)
+        Assert.Equal(compute.X, indexed[7].X, 3);
+        Assert.Equal(compute.Y, indexed[7].Y, 3);
+        Assert.Equal(compute.Z, indexed[7].Z, 3);
+        Assert.Equal(20f, indexed[7].X, 3);
+        Assert.Equal(0f, indexed[7].Z, 3);
+    }
+
+    static NextWaveDto WithMouths(NextWaveDto dto)
+    {
+        dto.Mouths = NextWave.GroupByMouth(dto.Groups);
+        return dto;
+    }
+
+    static void Fill(ObservationFakeWorld world)
     {
         world.Template = new StateDto
         {
@@ -192,7 +237,7 @@ public sealed class NextWaveTests
             {
                 new() { Id = new EntityId { Kind = "spawn", Name = "Front Road" } }
             },
-            NextWave = new NextWaveDto
+            NextWave = WithMouths(new NextWaveDto
             {
                 Available = true,
                 WaveNumber = 2,
@@ -214,47 +259,7 @@ public sealed class NextWaveTests
                 {
                     new NextWaveEnemyDto { Name = "E Melee", Count = 8, MaxHp = 20 }
                 }
-            }
+            })
         };
-    }
-
-    static CurrentScope Push(GameFacade facade)
-    {
-        var previous = GameFacade.Current;
-        GameFacade.Current = facade;
-        return new CurrentScope(previous);
-    }
-
-    sealed class CurrentScope : IDisposable
-    {
-        readonly GameFacade _previous;
-        public CurrentScope(GameFacade previous) => _previous = previous;
-        public void Dispose() => GameFacade.Current = _previous;
-    }
-
-    sealed class FakeWorld : IWorld
-    {
-        public WorldHints HintsValue { get; set; } = new();
-        public StateDto Template { get; set; } = new();
-
-        public WorldHints Hints() => HintsValue;
-
-        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
-        {
-            dto.Level = Template.Level ?? new LevelDto { SceneName = HintsValue.SceneName };
-            dto.Economy = Template.Economy;
-            dto.Clock = Template.Clock;
-            dto.King = Template.King;
-            dto.Settings = Template.Settings;
-            dto.Loadout = Template.Loadout;
-            dto.Slots = Template.Slots;
-            dto.Units = Template.Units;
-            dto.Enemies = Template.Enemies;
-            dto.Spawns = Template.Spawns;
-            dto.NextWave = Template.NextWave;
-            dto.Cutters = Template.Cutters;
-            _ = include;
-            _ = facade;
-        }
     }
 }

@@ -6,6 +6,7 @@ using ThronefallControl.Config;
 using ThronefallControl.Dto;
 using ThronefallControl.Game;
 using ThronefallControl.Http;
+using ThronefallControl.Tests.Fakes;
 using Xunit;
 
 namespace ThronefallControl.Tests;
@@ -27,7 +28,8 @@ public sealed class McpClientTests
         "thronefall_path_toggle",
         "thronefall_king_teleport",
         "thronefall_loadout_select",
-        "thronefall_level_start"
+        "thronefall_level_start",
+        "thronefall_units_deploy"
     };
 
     [Fact]
@@ -116,9 +118,48 @@ public sealed class McpClientTests
     }
 
     [Fact]
+    public void Deploy_tool_posts_units_deploy()
+    {
+        using var scope = new UnitTestScope();
+        scope.World.AddUnit(1, "P Knight");
+        scope.World.AddUnit(2, "P Knight");
+        using var restore = ConfigRestore.Capture();
+        PluginConfig.AuthToken = "";
+        PluginConfig.BindAddress = "127.0.0.1";
+        using var server = new Server();
+        Assert.True(ServerTests.TryStartOnFreePort(server));
+
+        using var mcp = McpSession.Start($"http://127.0.0.1:{PluginConfig.HttpPort}");
+        mcp.Rpc(RpcRequest(1, "initialize", new Dictionary<string, object?>
+        {
+            ["protocolVersion"] = "2024-11-05",
+            ["capabilities"] = new Dictionary<string, object?>(),
+            ["clientInfo"] = new Dictionary<string, object?> { ["name"] = "tests", ["version"] = "0" }
+        }));
+
+        var call = mcp.Rpc(ToolCall(2, "thronefall_units_deploy", new Dictionary<string, object?>
+        {
+            ["clientRequestId"] = "d-1",
+            ["picks"] = new object[]
+            {
+                new Dictionary<string, object?> { ["typeName"] = "P Knight", ["count"] = 2 }
+            },
+            ["target"] = new Dictionary<string, object?> { ["x"] = -24, ["y"] = 3, ["z"] = -43 },
+            ["hold"] = true,
+            ["spacing"] = 2
+        }));
+        var body = Json.Deserialize<UnitsCommandResponse>(ToolText(call));
+        Assert.NotNull(body);
+        Assert.True(body!.Ok);
+        Assert.Equal("warp", body.Path);
+        Assert.Equal(2, body.Applied.Count);
+        Assert.Equal(-43f, scope.World.Units[0].HomePosition.Z);
+    }
+
+    [Fact]
     public void Next_wave_tool_surfaces_mouths_and_counts()
     {
-        var world = new FakeNextWaveWorld
+        var world = new ObservationFakeWorld
         {
             HintsValue = new WorldHints
             {
@@ -129,7 +170,7 @@ public sealed class McpClientTests
             },
             Template = new StateDto
             {
-                NextWave = new NextWaveDto
+                NextWave = MouthsFromGroups(new NextWaveDto
                 {
                     Available = true,
                     WaveNumber = 2,
@@ -148,7 +189,7 @@ public sealed class McpClientTests
                             Count = 3
                         }
                     }
-                }
+                })
             }
         };
         var previous = GameFacade.Current;
@@ -190,19 +231,10 @@ public sealed class McpClientTests
         }
     }
 
-    sealed class FakeNextWaveWorld : IWorld
+    static NextWaveDto MouthsFromGroups(NextWaveDto dto)
     {
-        public WorldHints HintsValue { get; set; } = new();
-        public StateDto Template { get; set; } = new();
-
-        public WorldHints Hints() => HintsValue;
-
-        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
-        {
-            dto.NextWave = Template.NextWave;
-            _ = include;
-            _ = facade;
-        }
+        dto.Mouths = NextWave.GroupByMouth(dto.Groups);
+        return dto;
     }
 
     static Dictionary<string, object?> RpcRequest(int id, string method, Dictionary<string, object?>? @params = null) =>

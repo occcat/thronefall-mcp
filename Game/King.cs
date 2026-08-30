@@ -11,7 +11,6 @@ public interface IKingActions
     bool TeleportToCastle();
     bool TeleportToStart();
     bool TeleportTo(float x, float y, float z);
-    bool ScriptedPosts();
 }
 
 public sealed class RecordingKingActions : IKingActions
@@ -44,14 +43,6 @@ public sealed class RecordingKingActions : IKingActions
         TeleportCoords++;
         return true;
     }
-
-    public bool ScriptedPosts()
-    {
-        ScriptedPostCalls++;
-        return true;
-    }
-
-    public void HoldNearCastle() => HoldCalls++;
 
     public void MakeInvulnerable() => InvulnerableCalls++;
 }
@@ -300,8 +291,6 @@ public static class King
 
             return false;
         }
-
-        public bool ScriptedPosts() => false;
 
         static object? PlayerMovement() => GameReflection.Static("PlayerMovement");
 

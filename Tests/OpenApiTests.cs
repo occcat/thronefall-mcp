@@ -35,12 +35,32 @@ public sealed class OpenApiTests
         Assert.NotNull(paths["/debug/skip-wave"]);
         Assert.NotNull(paths["/debug/invulnerable"]);
         Assert.NotNull(paths["/debug/save"]);
+        Assert.NotNull(paths["/units/deploy"]);
+        Assert.NotNull(paths["/units/deploy"]?["post"]);
+        Assert.NotNull(paths["/state/next-wave"]);
+        Assert.NotNull(paths["/state/next-wave"]?["get"]);
 
         Assert.NotNull(paths["/loadout/select"]?["post"]);
         Assert.NotNull(paths["/openapi.json"]?["get"]);
         var policy = (string?)paths["/night/policy"]?["post"]?["summary"];
         Assert.Contains("intent", policy, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("immediately posts units", policy, StringComparison.OrdinalIgnoreCase);
+
+        foreach (var path in paths!.Properties())
+        {
+            if (path.Value is not JObject methods)
+                continue;
+            foreach (var method in methods.Properties())
+            {
+                if (!IsHttpMethod(method.Name))
+                    continue;
+                var routed = router.Dispatch(RequestContext.Create(method.Name.ToUpperInvariant(), path.Name));
+                Assert.DoesNotContain("no route", routed.Body ?? "", StringComparison.Ordinal);
+            }
+        }
+
+        var ready = router.Dispatch(RequestContext.Create("GET", "/health/ready"));
+        Assert.DoesNotContain("no route", ready.Body ?? "", StringComparison.Ordinal);
     }
 
     [Fact]
@@ -51,4 +71,13 @@ public sealed class OpenApiTests
         Assert.Equal(200, res.Status);
         JObject.Parse(res.Body);
     }
+
+    static bool IsHttpMethod(string name) =>
+        name.Equals("get", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("post", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("put", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("patch", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("delete", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("head", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("options", StringComparison.OrdinalIgnoreCase);
 }

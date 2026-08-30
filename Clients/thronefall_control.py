@@ -51,6 +51,9 @@ class Thronefall:
         q = "/state" + (f"?include={include}" if include else "")
         return self._req("GET", q)
 
+    def next_wave(self):
+        return self._req("GET", "/state/next-wave")
+
     def harvest_all(self, dry=False):
         return self._req("POST", "/harvest", {"clientRequestId": self._rid()}, dry)
 
@@ -61,6 +64,9 @@ class Thronefall:
             {"clientRequestId": self._rid(), "teleportKingNearby": teleport_king_nearby},
             dry,
         )
+
+    def cancel_choice(self):
+        return self._req("POST", "/slots/choice/cancel", {"clientRequestId": self._rid()})
 
     def call_night(self):
         return self._req("POST", "/night/call", {"clientRequestId": self._rid()})
@@ -75,6 +81,20 @@ class Thronefall:
                 "target": {"x": x, "y": 0, "z": z},
                 "hold": hold,
             },
+        )
+
+    def deploy(self, picks, target, hold=True, spacing=2, dry=False):
+        return self._req(
+            "POST",
+            "/units/deploy",
+            {
+                "clientRequestId": self._rid(),
+                "picks": picks,
+                "target": target,
+                "hold": hold,
+                "spacing": spacing,
+            },
+            dry,
         )
 
     def send_to_spawn(self, type_name, spawn_id, hold=True):

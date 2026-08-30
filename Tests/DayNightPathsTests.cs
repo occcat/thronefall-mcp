@@ -327,6 +327,7 @@ public sealed class DayNightPathsTests
             Assert.Equal(504, res.Status);
             var err = Json.Deserialize<ErrorResponse>(res.Body)!;
             Assert.Equal(ErrorCodes.MainThreadTimeout, err.Error);
+            Assert.Equal(MutateHttp.TimeoutMessage, err.Message);
             Assert.Null(err.Phase);
             Assert.Equal(0, session.World.SwitchToNightCalls);
         }

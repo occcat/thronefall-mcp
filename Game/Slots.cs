@@ -440,23 +440,18 @@ public static class Slots
             return false;
         }
 
-        if (backend.TransitionInProgress)
+        var blocked = MutateGuard.Check(
+            backend.TransitionInProgress,
+            backend.Phase,
+            "scene transition is running",
+            $"POST {path} is illegal in phase={backend.Phase}",
+            DayPhase);
+        if (blocked is { } gate)
         {
             fail = SlotCommandResult.Fail(
-                409,
-                ErrorCodes.TransitionInProgress,
-                "scene transition is running",
-                backend.Phase,
-                backend.Generation);
-            return false;
-        }
-
-        if (!string.Equals(backend.Phase, DayPhase, StringComparison.OrdinalIgnoreCase))
-        {
-            fail = SlotCommandResult.Fail(
-                409,
-                ErrorCodes.IllegalPhase,
-                $"POST {path} is illegal in phase={backend.Phase}",
+                gate.Status,
+                gate.Code,
+                gate.Message,
                 backend.Phase,
                 backend.Generation);
             return false;

@@ -10,8 +10,7 @@ return structured JSON instead of crashing the session:
 {"ok":false,"error":"game_not_running","message":"cannot reach http://127.0.0.1:17891: ..."}
 ```
 
-No pip packages. Plugin endpoints that other workers have not implemented yet
-still have tools; the HTTP layer returns `not_found` until those routes exist.
+No pip packages. Tools map to published HTTP routes.
 
 ## Run
 
@@ -62,18 +61,25 @@ Replace `/ABS/PATH/to/thronefall-mcp` with the clone root. Then
 
 ## Tools
 
+14 tools (see `TOOLS` in `server.py`):
+
 | Tool | HTTP |
 | --- | --- |
 | `thronefall_health` | `GET /health` (`ready=true` → `GET /health/ready`) |
 | `thronefall_state` | `GET /state` (`include` query) |
+| `thronefall_next_wave` | `GET /state/next-wave` |
 | `thronefall_harvest` | `POST /harvest` |
 | `thronefall_slot_upgrade` | `POST /slots/{id}/upgrade` |
+| `thronefall_slot_choice_cancel` | `POST /slots/choice/cancel` |
 | `thronefall_night_call` | `POST /night/call` |
 | `thronefall_units_command` | `POST /units/command` |
 | `thronefall_units_send_to_spawn` | `POST /units/send-to-spawn` |
+| `thronefall_units_deploy` | `POST /units/deploy` |
 | `thronefall_path_toggle` | `POST /path/toggle` |
 | `thronefall_king_teleport` | `POST /king/teleport` |
 | `thronefall_loadout_select` | `POST /loadout/select` |
 | `thronefall_level_start` | `POST /level/start` |
 
 `dryRun=true` is forwarded as `?dryRun=true`. Missing `clientRequestId` is filled in.
+
+`thronefall_units_deploy` maps to `POST /units/deploy` (picks / target / hold / spacing=2).

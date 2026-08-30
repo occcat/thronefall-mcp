@@ -2,19 +2,15 @@ using System.Collections.Generic;
 
 namespace ThronefallControl.Dto;
 
-public sealed class HarvestRequest
+public sealed class HarvestRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public int? SlotId { get; set; }
     public int? Generation { get; set; }
     public bool TeleportKingNearby { get; set; }
 }
 
-public sealed class SlotMutateRequest
+public sealed class SlotMutateRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public int? Generation { get; set; }
     public bool TeleportKingNearby { get; set; }
     public string? Name { get; set; }
