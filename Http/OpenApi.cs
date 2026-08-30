@@ -83,13 +83,14 @@ public static class OpenApi
             },
             ["/state"] = new Dictionary<string, object>
             {
-                ["get"] = Op("GetState", "Full snapshot. Query include=slots,units,training,enemies,spawns,loadout to clip arrays.")
+                ["get"] = Op("GetState", "Full snapshot. Query include=slots,units,training,enemies,spawns,loadout,nextWave to clip arrays.")
             },
             ["/state/slots"] = new Dictionary<string, object> { ["get"] = Op("GetSlots", "Build slots. Legal in day/night/end_screen.") },
             ["/state/units"] = new Dictionary<string, object> { ["get"] = Op("GetUnits", "Player units. Legal in day/night.") },
             ["/state/training"] = new Dictionary<string, object> { ["get"] = Op("GetTraining", "Barracks training / respawn progress. Legal in day/night.") },
             ["/state/enemies"] = new Dictionary<string, object> { ["get"] = Op("GetEnemies", "Enemy summary. Legal in day/night.") },
-            ["/state/spawns"] = new Dictionary<string, object> { ["get"] = Op("GetSpawns", "Spawn lines and suggested rallies.") },
+            ["/state/spawns"] = new Dictionary<string, object> { ["get"] = Op("GetSpawns", "All map spawn lines and suggested rallies. Not tonight's wave.") },
+            ["/state/next-wave"] = new Dictionary<string, object> { ["get"] = Op("GetNextWave", "Tonight's wave preview. Use nextWave.mouths[].enemies for per-mouth types and counts. Legal in day/night. Read-only; does not place HUD markers.") },
             ["/state/loadout"] = new Dictionary<string, object> { ["get"] = Op("GetLoadout", "Current perk/weapon string. Legal in menu/level_select/day/night.") },
             ["/openapi.json"] = new Dictionary<string, object>
             {

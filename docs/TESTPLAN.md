@@ -79,6 +79,17 @@ HTTP 模块测 mutate 时：注入可 `Pump` 的 `MainThread` 实例，不要碰
 - 世代不匹配 → `stale_id`。
 - 世代匹配但 instanceId 不在表内 → `not_found`。
 
+### 1.6 今晚波次预览
+
+现有：`Tests/NextWaveTests.cs`。
+
+- `include=slots,units,spawns` 的 JSON 不得含 `nextWave`。
+- `include=nextWave` 或 `GET /state/next-wave` 在 day 返回 200 且含 `available`。
+- FakeWorld 设 `Available=false` 时 JSON `available=false`，不得编造 `groups`。
+- menu 下 `GET /state/next-wave` → 409 `illegal_phase`。
+- 空 include（All）时 `nextWave` 非 null。
+- 无 `EnemySpawner` 时 `NextWave.Read` 为 `available=false`、空列表。
+
 ---
 
 ## 2. 局内手工 / curl
@@ -109,6 +120,7 @@ curl -s http://127.0.0.1:17891/state/units
 curl -s http://127.0.0.1:17891/state/training
 curl -s http://127.0.0.1:17891/state/enemies
 curl -s http://127.0.0.1:17891/state/spawns
+curl -s http://127.0.0.1:17891/state/next-wave
 curl -s http://127.0.0.1:17891/state/loadout
 ```
 
@@ -118,7 +130,8 @@ curl -s http://127.0.0.1:17891/state/loadout
 | `/state/units` | day / night | `typeName`、`homePosition`、`holdPosition`、`tags` 与 `tagIds` 同时存在。 |
 | `/state/training` | day / night | 每条有 `slotId`（`myBuildSlot` instanceId）、`buildingName`、`hasKnockedOut`、`timeTillNextRespawn`。菜单 409。`include=slots` 的 JSON 无 `training`。 |
 | `/state/enemies` | day / night | 白天 count 可为 0；夜间有波次时 count>0，无投射物字段。 |
-| `/state/spawns` | day / night | `polyline` 非空；`suggestedRally` 为插件计算。 |
+| `/state/spawns` | day / night | 地图全部出线。`polyline` 非空；`suggestedRally` 为插件计算。**不是**今晚入口。 |
+| `/state/next-wave` | day / night | 今晚预览。`available=true` 时只用 `groups` 里的 named rally；`available=false` 则空 groups，不要当全图 8 条线。菜单打此路径应 409 `illegal_phase`。 |
 | `/state/loadout` | menu / level_select / day / night | `asString` 与当前 perk/武器一致。 |
 
 菜单里打 `/state/slots` 或 `/state/training` 应 `illegal_phase`（以设计：合法 phase 外拒绝为准）。

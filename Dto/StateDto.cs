@@ -34,6 +34,9 @@ public sealed class StateDto
     public List<SpawnLineDto>? Spawns { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public NextWaveDto? NextWave { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public List<CutterDto>? Cutters { get; set; }
 
     public string NightPolicy { get; set; } = NightPolicies.Human;

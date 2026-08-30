@@ -78,6 +78,8 @@ public static class Observation
             dto.Enemies = ReadEnemies(ids);
         if (include.WantsSpawns)
             dto.Spawns = ReadSpawns(ids);
+        if (include.WantsNextWave)
+            dto.NextWave = NextWave.Read(ids);
         if (include.WantsCutters)
             dto.Cutters = ReadCutters(ids);
     }

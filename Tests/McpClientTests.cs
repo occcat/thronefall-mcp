@@ -4,17 +4,20 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ThronefallControl.Config;
 using ThronefallControl.Dto;
+using ThronefallControl.Game;
 using ThronefallControl.Http;
 using Xunit;
 
 namespace ThronefallControl.Tests;
 
+[Collection(GameFacadeCollection.Name)]
 public sealed class McpClientTests
 {
     static readonly string[] ExpectedTools =
     {
         "thronefall_health",
         "thronefall_state",
+        "thronefall_next_wave",
         "thronefall_harvest",
         "thronefall_slot_upgrade",
         "thronefall_slot_choice_cancel",
@@ -49,6 +52,12 @@ public sealed class McpClientTests
         Assert.NotNull(names);
         foreach (var tool in ExpectedTools)
             Assert.Contains(tool, names!);
+
+        var nextWaveTool = listed["result"]?["tools"]?
+            .FirstOrDefault(t => t["name"]?.ToString() == "thronefall_next_wave");
+        var nextWaveDesc = nextWaveTool?["description"]?.ToString() ?? "";
+        Assert.Contains("mouths", nextWaveDesc, StringComparison.Ordinal);
+        Assert.DoesNotContain("map-wide spawn catalog", nextWaveDesc, StringComparison.Ordinal);
 
         var health = mcp.Rpc(ToolCall(3, "thronefall_health"));
         var body = Json.Deserialize<ErrorResponse>(ToolText(health));
@@ -104,6 +113,96 @@ public sealed class McpClientTests
         }));
         var missingUpgrade = Json.Deserialize<ErrorResponse>(ToolText(upgrade));
         Assert.Equal(ErrorCodes.UnsupportedInThisBuild, missingUpgrade!.Error);
+    }
+
+    [Fact]
+    public void Next_wave_tool_surfaces_mouths_and_counts()
+    {
+        var world = new FakeNextWaveWorld
+        {
+            HintsValue = new WorldHints
+            {
+                SceneName = "Nordfels",
+                SceneState = "InGame",
+                Timestate = "Day",
+                MatchState = "InMatch"
+            },
+            Template = new StateDto
+            {
+                NextWave = new NextWaveDto
+                {
+                    Available = true,
+                    WaveNumber = 2,
+                    Groups =
+                    {
+                        new NextWaveGroupDto
+                        {
+                            Spawn = new EntityId { InstanceId = 88, Generation = 1, Kind = "spawn", Name = "High Back Road" },
+                            EnemyName = "E Melee",
+                            Count = 8
+                        },
+                        new NextWaveGroupDto
+                        {
+                            Spawn = new EntityId { InstanceId = 88, Generation = 1, Kind = "spawn", Name = "High Back Road" },
+                            EnemyName = "E Archer",
+                            Count = 3
+                        }
+                    }
+                }
+            }
+        };
+        var previous = GameFacade.Current;
+        GameFacade.Current = new GameFacade(world);
+        using var restore = ConfigRestore.Capture();
+        PluginConfig.AuthToken = "";
+        PluginConfig.BindAddress = "127.0.0.1";
+        using var server = new Server();
+        Assert.True(ServerTests.TryStartOnFreePort(server));
+        try
+        {
+            using var mcp = McpSession.Start($"http://127.0.0.1:{PluginConfig.HttpPort}");
+            mcp.Rpc(RpcRequest(1, "initialize", new Dictionary<string, object?>
+            {
+                ["protocolVersion"] = "2024-11-05",
+                ["capabilities"] = new Dictionary<string, object?>(),
+                ["clientInfo"] = new Dictionary<string, object?> { ["name"] = "tests", ["version"] = "0" }
+            }));
+
+            var call = mcp.Rpc(ToolCall(2, "thronefall_next_wave"));
+            var text = ToolText(call);
+            Assert.Contains("High Back Road", text, StringComparison.Ordinal);
+            Assert.Contains("E Melee", text, StringComparison.Ordinal);
+            Assert.Contains("E Archer", text, StringComparison.Ordinal);
+            Assert.Contains("\"count\":8", text.Replace(" ", ""), StringComparison.Ordinal);
+            Assert.Contains("\"count\":3", text.Replace(" ", ""), StringComparison.Ordinal);
+
+            var parsed = JObject.Parse(text);
+            Assert.True(parsed["available"]?.Value<bool>());
+            Assert.NotNull(parsed["mouths"]);
+            Assert.Equal("High Back Road", parsed["mouths"]?[0]?["spawn"]?["name"]?.ToString());
+            Assert.Equal(2, parsed["mouths"]?[0]?["enemies"]?.Count());
+            Assert.Equal(2, parsed["nextWave"]?["waveNumber"]?.Value<int>());
+            Assert.NotNull(parsed["nextWave"]?["mouths"]);
+        }
+        finally
+        {
+            GameFacade.Current = previous;
+        }
+    }
+
+    sealed class FakeNextWaveWorld : IWorld
+    {
+        public WorldHints HintsValue { get; set; } = new();
+        public StateDto Template { get; set; } = new();
+
+        public WorldHints Hints() => HintsValue;
+
+        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
+        {
+            dto.NextWave = Template.NextWave;
+            _ = include;
+            _ = facade;
+        }
     }
 
     static Dictionary<string, object?> RpcRequest(int id, string method, Dictionary<string, object?>? @params = null) =>
