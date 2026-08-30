@@ -23,6 +23,8 @@ public sealed class OpenApiTests
         Assert.NotNull(paths);
         Assert.NotNull(paths!["/health"]);
         Assert.NotNull(paths["/openapi.json"]);
+        Assert.NotNull(paths["/state/training"]);
+        Assert.NotNull(paths["/state/training"]?["get"]);
         Assert.NotNull(paths["/loadout/select"]);
         Assert.NotNull(paths["/level/start"]);
         Assert.NotNull(paths["/king/teleport"]);
