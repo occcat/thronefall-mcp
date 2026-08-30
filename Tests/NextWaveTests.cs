@@ -1,7 +1,9 @@
 using ThronefallControl.Dto;
 using ThronefallControl.Game;
 using ThronefallControl.Http;
+using ThronefallControl.Tests.Fakes;
 using Xunit;
+using static ThronefallControl.Tests.Fakes.ObservationFakeWorld;
 
 namespace ThronefallControl.Tests;
 
@@ -11,7 +13,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Include_without_nextWave_omits_it_from_json()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state?include=slots,units,spawns"));
@@ -25,7 +27,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Include_nextWave_in_day_returns_available()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state?include=nextWave"));
@@ -41,7 +43,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Slice_next_wave_in_day_returns_available()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state/next-wave"));
@@ -62,7 +64,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Unavailable_preview_does_not_fabricate_groups()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         world.Template.NextWave = new NextWaveDto { Available = false };
         using var _ = Push(new GameFacade(world));
@@ -81,7 +83,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Slice_next_wave_in_menu_is_illegal_phase()
     {
-        var world = new FakeWorld { HintsValue = Menu() };
+        var world = new ObservationFakeWorld { HintsValue = Menu() };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state/next-wave"));
@@ -95,7 +97,7 @@ public sealed class NextWaveTests
     [Fact]
     public void All_include_keeps_nextWave()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels") };
         Fill(world);
         var dto = new GameFacade(world).GetState();
         Assert.NotNull(dto.NextWave);
@@ -160,7 +162,7 @@ public sealed class NextWaveTests
     [Fact]
     public void Night_allows_next_wave_slice()
     {
-        var world = new FakeWorld { HintsValue = InGame("Nordfels", timestate: "Night") };
+        var world = new ObservationFakeWorld { HintsValue = InGame("Nordfels", timestate: "Night") };
         Fill(world);
         using var _ = Push(new GameFacade(world));
         var res = Router.CreateDefault().Dispatch(RequestContext.Create("GET", "/state/next-wave"));
@@ -168,21 +170,7 @@ public sealed class NextWaveTests
         Assert.True(Json.Deserialize<StateDto>(res.Body)!.NextWave!.Available);
     }
 
-    static WorldHints Menu() => new()
-    {
-        SceneName = "_StartMenu",
-        SceneState = "MainMenu"
-    };
-
-    static WorldHints InGame(string scene, string timestate = "Day") => new()
-    {
-        SceneName = scene,
-        SceneState = "InGame",
-        Timestate = timestate,
-        MatchState = "InMatch"
-    };
-
-    static void Fill(FakeWorld world)
+    static void Fill(ObservationFakeWorld world)
     {
         world.Template = new StateDto
         {
@@ -216,45 +204,5 @@ public sealed class NextWaveTests
                 }
             }
         };
-    }
-
-    static CurrentScope Push(GameFacade facade)
-    {
-        var previous = GameFacade.Current;
-        GameFacade.Current = facade;
-        return new CurrentScope(previous);
-    }
-
-    sealed class CurrentScope : IDisposable
-    {
-        readonly GameFacade _previous;
-        public CurrentScope(GameFacade previous) => _previous = previous;
-        public void Dispose() => GameFacade.Current = _previous;
-    }
-
-    sealed class FakeWorld : IWorld
-    {
-        public WorldHints HintsValue { get; set; } = new();
-        public StateDto Template { get; set; } = new();
-
-        public WorldHints Hints() => HintsValue;
-
-        public void Capture(GameFacade facade, StateDto dto, StateInclude include)
-        {
-            dto.Level = Template.Level ?? new LevelDto { SceneName = HintsValue.SceneName };
-            dto.Economy = Template.Economy;
-            dto.Clock = Template.Clock;
-            dto.King = Template.King;
-            dto.Settings = Template.Settings;
-            dto.Loadout = Template.Loadout;
-            dto.Slots = Template.Slots;
-            dto.Units = Template.Units;
-            dto.Enemies = Template.Enemies;
-            dto.Spawns = Template.Spawns;
-            dto.NextWave = Template.NextWave;
-            dto.Cutters = Template.Cutters;
-            _ = include;
-            _ = facade;
-        }
     }
 }
