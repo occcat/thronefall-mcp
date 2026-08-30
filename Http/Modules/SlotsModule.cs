@@ -30,6 +30,7 @@ public sealed class SlotsModule : IRouteModule
         router.Map("POST", "/harvest", Harvest);
         router.Map("POST", "/slots/{id}/build", ctx => BuildOrUpgrade(ctx, "build"));
         router.Map("POST", "/slots/{id}/upgrade", ctx => BuildOrUpgrade(ctx, "upgrade"));
+        router.Map("POST", "/slots/{id}/choice", Choice);
     }
 
     HttpResponse Harvest(RequestContext ctx)
