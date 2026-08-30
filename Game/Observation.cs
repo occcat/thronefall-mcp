@@ -492,6 +492,7 @@ public static class Observation
         dto.Unlocks = unlocks;
         if (dto.IsWaitingForChoice)
             dto.Choices = ReadChoices();
+        SlotPreview.Fill(dto, slot, instanceBySlot);
         return dto;
     }
 
