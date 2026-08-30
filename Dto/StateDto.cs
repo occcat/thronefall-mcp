@@ -66,6 +66,11 @@ public sealed class ClockDto
     public int Wavenumber { get; set; }
     public int WaveCount { get; set; }
     public bool SpawningInProgress { get; set; }
+    public bool FinalWaveComingUp { get; set; }
+    public bool PreFinalWaveComingUp { get; set; }
+    public bool WaveBeforeFinalWaveComingUp { get; set; }
+    public int CurrentScore { get; set; }
+    public int MaxScorePerNight { get; set; }
 }
 
 public sealed class KingDto
