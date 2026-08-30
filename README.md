@@ -84,16 +84,29 @@ Screenshot bots re-click HUD every patch. Memory tables break when Unity moves a
 
 | Area | State |
 | --- | --- |
-| Design (macOS Mono, HTTP, IDs, night policies) | Done — [`docs/design.md`](docs/design.md) when present on the work branch |
+| Design (macOS Mono, HTTP, IDs, night policies) | Done — [`docs/design.md`](docs/design.md) |
 | Repo conventions | Done — [`AGENTS.md`](AGENTS.md) |
-| BepInEx plugin + HTTP | In progress |
+| BepInEx plugin + HTTP | Skeleton on `thoxvi/local-http-control`; workers add `Http/Modules/` |
 | MCP stdio wrapper | Planned (same commands as HTTP) |
 | Windows / Linux game builds | Not this milestone |
+
+Plugin GUID: `com.thronefall.control`. Default bind: `127.0.0.1:17891`.
+
+## Unit tests (no game)
+
+Needs the .NET 8 SDK. `Http/` and `Dto/` have no `UnityEngine` references.
+
+```bash
+dotnet test ThronefallControl.Tests.csproj
+```
+
+Covers the HTTP router, token auth, JSON error envelope, main-thread queue with a fake dispatcher, and `IdRegistry` generation / stale ids. In-game curl checks are in [`docs/TESTPLAN.md`](docs/TESTPLAN.md).
 
 ## Docs
 
 - [`AGENTS.md`](AGENTS.md) — Conventional Commits (Chinese body, what changed + why)
-- Design and test plan land next to the plugin implementation
+- [`docs/design.md`](docs/design.md) — BepInEx plugin HTTP design
+- [`docs/TESTPLAN.md`](docs/TESTPLAN.md) — unit tests and Neuland / Nordfels curl checklist
 - Game install (read-only): `~/Library/Application Support/Steam/steamapps/common/Thronefall/thronefall.app`
 - Saves: `~/Library/Application Support/Grizzly Games/Thronefall/`
 
