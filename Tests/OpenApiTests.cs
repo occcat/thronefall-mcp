@@ -1,3 +1,4 @@
+using System;
 using Newtonsoft.Json.Linq;
 using ThronefallControl.Http;
 using Xunit;
@@ -33,6 +34,9 @@ public sealed class OpenApiTests
 
         Assert.NotNull(paths["/loadout/select"]?["post"]);
         Assert.NotNull(paths["/openapi.json"]?["get"]);
+        var policy = (string?)paths["/night/policy"]?["post"]?["summary"];
+        Assert.Contains("intent", policy, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("immediately posts units", policy, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

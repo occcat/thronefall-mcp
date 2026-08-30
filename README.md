@@ -66,7 +66,7 @@ The script extracts next to `thronefall.app`, sets `executable_name="thronefall.
 curl -s http://127.0.0.1:17891/health
 ```
 
-Night policy defaults to **`human`**: the plugin does not teleport the king, rewrite HoldPosition, or call `MakeInvulerable`. Cheats (`DEBUGUpgradeToMax`, skip wave, god mode, save API) stay behind flags, off by default.
+Night policy defaults to **`human`**: the plugin does not teleport the king, rewrite HoldPosition, or call `MakeInvulerable`. `scripted_posts` records intent only; it does not send units until the units worker owns dispatch. Cheats (`DEBUGUpgradeToMax`, skip wave, god mode, save API) stay behind flags, off by default.
 
 Apple Silicon: this plugin does not use Harmony. If doorstop still fails to inject a universal binary, the unix `run_bepinex.sh` already re-passes `DYLD_INSERT_LIBRARIES` through `arch`; as a diagnostic, `arch -x86_64 ./run_bepinex.sh` from the game root.
 
@@ -90,7 +90,7 @@ Python: `Clients/thronefall_control.py` (`Thronefall().health()`, `.select_loado
 | **In-process calls, not fake clicks** | Harvest, build, and upgrade go through `BuildSlot.TryToBuildOrUpgradeAndPay` and `BuildingInteractor.Harvest`. The king does not have to walk into range. |
 | **A snapshot the model can actually plan on** | `GET /state` returns gold, day/night, every slot's level and next cost, unit HP/home/hold, and enemy spawn lines — live values, not wiki tables. |
 | **Units go to coordinates, buildings stay on slots** | `POST /units/command` writes `HomePosition` / Hold, or the game's own `PlaceCommandedUnitsAndCalculateTargetPositions` solver. `POST /units/send-to-spawn` maps a unit type onto an `EnemySpawnLine`. |
-| **You keep the night, or you don't** | Night policy is `human` (default), `afk_castle`, or `scripted_posts`. Combat micro is out of scope. |
+| **You keep the night, or you don't** | Night policy is `human` (default: no combat), `afk_castle` (king to castle), or `scripted_posts` (**intent only** until the units worker owns spawn-line dispatch). Combat micro is out of scope. |
 | **Loopback only** | `HttpListener` binds `127.0.0.1:17891`. Optional `X-Thronefall-Token`. Cheats (`DEBUGUpgradeToMax`, skip wave, god mode) stay behind flags, off by default. |
 | **Any agent that can HTTP** | Grok, Claude Code, Codex, curl, or a thin Python client. Strategy stays outside the plugin so the same actuator can serve all of them. |
 

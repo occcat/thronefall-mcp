@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using ThronefallControl.Config;
 using ThronefallControl.Dto;
@@ -64,6 +65,7 @@ public static class King
     public static void Reset()
     {
         Actions = null;
+        GameReflection.Reset();
         CurrentPolicy = string.IsNullOrEmpty(PluginConfig.DefaultNightPolicy)
             ? NightPolicies.Human
             : PluginConfig.DefaultNightPolicy;
@@ -113,11 +115,20 @@ public static class King
         }
         else if (parsed == NightPolicies.ScriptedPosts)
         {
-            applied.CommandUnits = true;
-            if (!dryRun && actor != null && !actor.ScriptedPosts())
+            applied.IntentOnly = true;
+            applied.CommandUnits = false;
+            applied.Invulnerable = false;
+            applied.Combat = "intent_only";
+            if (!dryRun)
+                CurrentPolicy = parsed;
+            return new NightPolicyResult
             {
-                return UnsupportedPolicy(parsed, "scripted_posts dispatch is unsupported in this build");
-            }
+                Ok = true,
+                Policy = parsed,
+                Applied = applied,
+                DryRun = dryRun,
+                Message = "scripted_posts is intent-only until the units worker owns spawn-line dispatch"
+            };
         }
 
         applied.Invulnerable = false;
@@ -260,7 +271,7 @@ public static class King
                 var args = method.GetParameters();
                 if (args.Length != 1)
                     continue;
-                var vec = MakeVec3(args[0].ParameterType, x, y, z);
+                var vec = GameReflection.MakeVec3(args[0].ParameterType, x, y, z);
                 if (vec == null)
                     continue;
                 method.Invoke(movement, new[] { vec });
@@ -270,80 +281,131 @@ public static class King
             return false;
         }
 
-        public bool ScriptedPosts()
-        {
-            // Units worker owns spawn-line dispatch; king policy only records intent unless hooked.
-            return true;
-        }
+        public bool ScriptedPosts() => false;
 
-        static object? PlayerMovement()
-        {
-            var type = Clr.Game("PlayerMovement");
-            if (type == null)
-                return null;
-            return type.GetField("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-        }
+        static object? PlayerMovement() => GameReflection.Static("PlayerMovement");
 
         static (float x, float y, float z)? FindTaggedPosition(object tag)
         {
-            var tmType = Clr.Game("TagManager");
-            var tm = tmType?.GetField("instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            if (tm == null || tmType == null)
+            var tm = GameReflection.Static("TagManager");
+            if (tm == null)
                 return null;
 
-            foreach (var method in tmType.GetMethods(BindingFlags.Instance | BindingFlags.Public))
+            var etagType = GameReflection.Type("ETag") ?? GameReflection.Type("TagManager+ETag");
+            var castle = CoerceTag(etagType, tag);
+
+            var direct = FindDirectCastle(tm, etagType, castle);
+            if (direct != null)
+                return direct;
+
+            return FindClosestCastle(tm, etagType, castle);
+        }
+
+        static (float x, float y, float z)? FindDirectCastle(object tm, Type? etagType, object castle)
+        {
+            foreach (var method in tm.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public))
             {
-                if (method.Name != "FindClosestTaggedObjectWithTags")
+                if (method.Name != "FindAllTaggedObjectsWithTagDirect_UseWithCare")
                     continue;
+                var args = method.GetParameters();
+                if (args.Length != 1)
+                    continue;
+                object tagArg = castle;
+                if (etagType != null && args[0].ParameterType.IsEnum)
+                    tagArg = CoerceTag(args[0].ParameterType, castle);
+                else if (!args[0].ParameterType.IsInstanceOfType(castle) && args[0].ParameterType.IsEnum)
+                    tagArg = CoerceTag(args[0].ParameterType, castle);
                 try
                 {
-                    var found = method.Invoke(tm, BuildTagArgs(method, tag));
-                    var pos = ReadPosition(found);
-                    if (pos != null)
-                        return pos;
+                    var list = method.Invoke(tm, new[] { tagArg });
+                    foreach (var item in GameReflection.Enumerate(list))
+                    {
+                        var pos = GameReflection.ReadPosition(item);
+                        if (pos != null)
+                            return pos;
+                    }
                 }
                 catch
                 {
-                    // try next overload
+                    // next overload
                 }
             }
 
             return null;
         }
 
-        static object?[]? BuildTagArgs(MethodInfo method, object tag)
+        static (float x, float y, float z)? FindClosestCastle(object tm, Type? etagType, object castle)
         {
-            var args = method.GetParameters();
-            var values = new object?[args.Length];
-            var filled = false;
-            for (var i = 0; i < args.Length; i++)
+            foreach (var method in tm.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public))
             {
-                var p = args[i].ParameterType;
-                if (p.IsArray && !filled)
+                if (method.Name != "FindClosestTaggedObjectWithTags")
+                    continue;
+                var bound = BindClosestArgs(method, etagType, castle);
+                if (bound == null)
+                    continue;
+                try
                 {
-                    var elem = p.GetElementType();
-                    var arr = Array.CreateInstance(elem ?? typeof(object), 1);
-                    arr.SetValue(CoerceTag(elem, tag), 0);
-                    values[i] = arr;
-                    filled = true;
+                    var found = method.Invoke(tm, bound);
+                    var pos = GameReflection.ReadPosition(found);
+                    if (pos != null)
+                        return pos;
                 }
-                else if (p.IsEnum && !filled)
+                catch
                 {
-                    values[i] = CoerceTag(p, tag);
-                    filled = true;
-                }
-                else if (p == typeof(string) && tag is string s && !filled)
-                {
-                    values[i] = s;
-                    filled = true;
-                }
-                else if (p.IsValueType)
-                {
-                    values[i] = Activator.CreateInstance(p);
+                    // next overload
                 }
             }
 
-            return filled ? values : null;
+            return null;
+        }
+
+        static object[]? BindClosestArgs(MethodInfo method, Type? etagType, object castle)
+        {
+            var args = method.GetParameters();
+            if (args.Length != 3)
+                return null;
+            if (!IsVec3(args[0].ParameterType))
+                return null;
+            if (!IsETagList(args[1].ParameterType, etagType) || !IsETagList(args[2].ParameterType, etagType))
+                return null;
+
+            var origin = Origin(args[0].ParameterType);
+            if (origin == null)
+                return null;
+            var elem = args[1].ParameterType.IsGenericType
+                ? args[1].ParameterType.GetGenericArguments()[0]
+                : etagType ?? castle.GetType();
+            var mustHave = GameReflection.MakeList(elem, CoerceTag(elem, castle));
+            var mayNotHave = GameReflection.MakeList(elem);
+            return new[] { origin, mustHave, mayNotHave };
+        }
+
+        static object? Origin(Type vecType)
+        {
+            var movement = PlayerMovement();
+            var pos = GameReflection.ReadPosition(movement);
+            if (pos != null)
+            {
+                var made = GameReflection.MakeVec3(vecType, pos.Value.x, pos.Value.y, pos.Value.z);
+                if (made != null)
+                    return made;
+            }
+
+            return GameReflection.MakeVec3(vecType, 0, 0, 0) ?? Activator.CreateInstance(vecType);
+        }
+
+        static bool IsVec3(Type type) =>
+            type.Name == "Vector3" ||
+            type.GetField("x") != null && type.GetField("y") != null && type.GetField("z") != null;
+
+        static bool IsETagList(Type type, Type? etagType)
+        {
+            if (!type.IsGenericType)
+                return false;
+            if (type.GetGenericTypeDefinition() != typeof(List<>))
+                return false;
+            var elem = type.GetGenericArguments()[0];
+            return elem.IsEnum || elem == etagType || elem.Name == "ETag";
         }
 
         static object CoerceTag(Type? enumType, object tag)
@@ -356,63 +418,14 @@ public static class King
                 catch { /* fall through */ }
             }
 
+            if (tag.GetType().IsEnum)
+            {
+                try { return Enum.ToObject(enumType, Convert.ToInt32(tag)); }
+                catch { /* fall through */ }
+            }
+
             try { return Enum.ToObject(enumType, tag); }
             catch { return tag; }
         }
-
-        static (float x, float y, float z)? ReadPosition(object? obj)
-        {
-            if (obj == null)
-                return null;
-            var transform = obj.GetType().GetProperty("transform")?.GetValue(obj)
-                            ?? obj.GetType().GetField("transform")?.GetValue(obj);
-            var posObj = transform?.GetType().GetProperty("position")?.GetValue(transform);
-            if (posObj == null)
-                return null;
-            var t = posObj.GetType();
-            float Read(string n)
-            {
-                var p = t.GetField(n)?.GetValue(posObj) ?? t.GetProperty(n)?.GetValue(posObj);
-                return p is float f ? f : Convert.ToSingle(p);
-            }
-
-            return (Read("x"), Read("y"), Read("z"));
-        }
-
-        static object? MakeVec3(Type type, float x, float y, float z)
-        {
-            try
-            {
-                var boxed = Activator.CreateInstance(type);
-                if (boxed == null)
-                    return null;
-                SetFloat(type, boxed, "x", x);
-                SetFloat(type, boxed, "y", y);
-                SetFloat(type, boxed, "z", z);
-                return boxed;
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        static void SetFloat(Type type, object boxed, string name, float value)
-        {
-            var field = type.GetField(name);
-            if (field != null)
-            {
-                field.SetValue(boxed, value);
-                return;
-            }
-
-            type.GetProperty(name)?.SetValue(boxed, value);
-        }
     }
-}
-
-static class Clr
-{
-    public static Type? Game(string typeName) =>
-        Type.GetType(typeName + ", Assembly-CSharp") ?? Type.GetType(typeName);
 }

@@ -71,6 +71,7 @@ public sealed class NightPolicyAppliedDto
     public bool ChangeHold { get; set; }
     public bool CommandUnits { get; set; }
     public bool Invulnerable { get; set; }
+    public bool IntentOnly { get; set; }
     public string Combat { get; set; } = "untouched";
 }
 
