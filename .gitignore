@@ -74,6 +74,9 @@ pnpm-debug.log*
 *.key
 secrets/
 
+# Local play notes from thronefall-play (per-match experience, not source)
+.grok/skills/thronefall-play/.experience
+
 # Game saves / local player data accidentally copied in
 ThroneSave*.sav
 steam_autocloud.vdf
