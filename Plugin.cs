@@ -1,6 +1,10 @@
+using System;
 using BepInEx;
 using ThronefallControl.Config;
 using ThronefallControl.Game;
+using ThronefallControl.Http;
+using ThronefallControl.Http.Modules;
+using UnityEngine;
 
 namespace ThronefallControl;
 
@@ -9,21 +13,62 @@ public sealed class Plugin : BaseUnityPlugin
 {
     internal static Plugin? Instance { get; private set; }
 
+    Server? _server;
+    MainThread? _mainThread;
+
     private void Awake()
     {
         Instance = this;
-        PluginConfig.Bind(Config);
-        MainThread.Current ??= new MainThread();
+        try
+        {
+            PluginConfig.Bind(Config);
+            _mainThread = MainThread.Current ?? new MainThread();
+            MainThread.Current = _mainThread;
+            HealthModule.FrameCountReader = ReadFrameCount;
+
+            _server = new Server(
+                logInfo: msg => Logger.LogInfo(msg),
+                logError: msg => Logger.LogError(msg));
+            _server.Start();
+            if (!_server.IsListening)
+                Logger.LogError("HTTP API disabled after bind failure; game continues.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"plugin Awake failed; game continues: {ex}");
+        }
     }
 
     private void Update()
     {
-        MainThread.Current?.Pump();
+        try
+        {
+            _mainThread?.Pump();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"MainThread.Pump: {ex}");
+        }
     }
 
     private void OnDestroy()
     {
+        try
+        {
+            _server?.Stop();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"HTTP stop failed: {ex}");
+        }
+
+        _server = null;
+        HealthModule.FrameCountReader = null;
+        if (ReferenceEquals(MainThread.Current, _mainThread))
+            MainThread.Current = null;
         if (ReferenceEquals(Instance, this))
             Instance = null;
     }
+
+    static int ReadFrameCount() => Time.frameCount;
 }

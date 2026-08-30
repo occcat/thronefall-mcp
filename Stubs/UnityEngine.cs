@@ -12,4 +12,11 @@ namespace UnityEngine
     }
 
     public class GameObject : Object { }
+
+    public static class Time
+    {
+        public static int frameCount { get; set; }
+        public static float unscaledTime { get; set; }
+        public static float realtimeSinceStartup { get; set; }
+    }
 }

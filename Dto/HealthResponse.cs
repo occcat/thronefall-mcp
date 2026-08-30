@@ -12,4 +12,6 @@ public sealed class HealthResponse
     public string? Scene { get; set; }
     public bool CheatsEnabled { get; set; }
     public double UptimeSeconds { get; set; }
+    public bool Ready { get; set; }
+    public int FrameCount { get; set; }
 }
