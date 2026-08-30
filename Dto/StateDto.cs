@@ -25,6 +25,9 @@ public sealed class StateDto
     public List<UnitDto>? Units { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public List<TrainingDto>? Training { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public EnemySummaryDto? Enemies { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
