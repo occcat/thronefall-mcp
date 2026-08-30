@@ -7,6 +7,7 @@ public sealed class StateInclude
 {
     public const string Slots = "slots";
     public const string Units = "units";
+    public const string Training = "training";
     public const string Enemies = "enemies";
     public const string Spawns = "spawns";
     public const string Loadout = "loadout";
@@ -15,6 +16,7 @@ public sealed class StateInclude
     public bool All { get; private set; }
     public bool WantSlots { get; private set; }
     public bool WantUnits { get; private set; }
+    public bool WantTraining { get; private set; }
     public bool WantEnemies { get; private set; }
     public bool WantSpawns { get; private set; }
     public bool WantLoadout { get; private set; }
@@ -22,6 +24,7 @@ public sealed class StateInclude
 
     public bool WantsSlots => All || WantSlots;
     public bool WantsUnits => All || WantUnits;
+    public bool WantsTraining => All || WantTraining;
     public bool WantsEnemies => All || WantEnemies;
     public bool WantsSpawns => All || WantSpawns;
     public bool WantsLoadout => All || WantLoadout;
@@ -46,6 +49,9 @@ public sealed class StateInclude
                 case Units:
                     include.WantUnits = true;
                     break;
+                case Training:
+                    include.WantTraining = true;
+                    break;
                 case Enemies:
                     include.WantEnemies = true;
                     break;
@@ -61,8 +67,9 @@ public sealed class StateInclude
             }
         }
 
-        if (!include.WantSlots && !include.WantUnits && !include.WantEnemies &&
-            !include.WantSpawns && !include.WantLoadout && !include.WantCutters)
+        if (!include.WantSlots && !include.WantUnits && !include.WantTraining &&
+            !include.WantEnemies && !include.WantSpawns && !include.WantLoadout &&
+            !include.WantCutters)
         {
             // Unknown tokens only: still omit large arrays rather than dump everything.
             return include;
@@ -78,6 +85,9 @@ public sealed class StateInclude
 
         if (!WantsUnits) dto.Units = null;
         else dto.Units ??= new();
+
+        if (!WantsTraining) dto.Training = null;
+        else dto.Training ??= new();
 
         if (!WantsEnemies) dto.Enemies = null;
         else dto.Enemies ??= new EnemySummaryDto();

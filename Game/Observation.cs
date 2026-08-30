@@ -72,6 +72,8 @@ public static class Observation
             dto.Slots = ReadSlots(ids);
         if (include.WantsUnits)
             dto.Units = ReadUnits(ids);
+        if (include.WantsTraining)
+            dto.Training = Training.ReadAll();
         if (include.WantsEnemies)
             dto.Enemies = ReadEnemies(ids);
         if (include.WantsSpawns)
