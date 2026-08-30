@@ -14,6 +14,8 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         PluginConfig.Bind(Config);
         MainThread.Current ??= new MainThread();
+        ReflectionCache.TryInit(Logger);
+        GameFacade.CreateLive();
     }
 
     private void Update()
