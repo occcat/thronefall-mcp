@@ -223,6 +223,83 @@ public sealed class SlotCommandTests
     }
 
     [Fact]
+    public async Task Cancel_choice_in_day_clears_busy()
+    {
+        await using var env = Env();
+        env.Backend.Balance = 10;
+        env.Backend.Add(ChoiceSlot(5, delay: 0));
+        await env.Post("/slots/5/build", """{"clientRequestId":"b-then-cancel"}""");
+        Assert.True(env.Backend.ChoiceBusy);
+
+        var res = await env.Post("/slots/choice/cancel", """{"clientRequestId":"x-1"}""");
+        Assert.Equal(200, res.Status);
+        var body = Json.Deserialize<CancelChoiceResponse>(res.Body);
+        Assert.True(body!.Ok);
+        Assert.True(body.Canceled);
+        Assert.Equal("day", body.Phase);
+        Assert.Equal(env.Backend.Generation, body.Generation);
+        Assert.False(env.Backend.ChoiceBusy);
+        Assert.False(env.Backend.Get(5).IsWaitingForChoice);
+        Assert.Null(env.Backend.Get(5).SelectedChoice);
+        Assert.Equal(0, env.Backend.Get(5).Level);
+        Assert.Equal(1, env.Backend.CancelActiveChoiceCalls);
+    }
+
+    [Fact]
+    public async Task Cancel_choice_in_menu_is_illegal_phase()
+    {
+        await using var env = Env();
+        env.Backend.Phase = "menu";
+        env.Backend.Add(ChoiceSlot(5, delay: 0));
+        env.Backend.Get(5).IsWaitingForChoice = true;
+        env.Backend.Get(5).PendingChoice = true;
+
+        var res = await env.Post("/slots/choice/cancel", """{"clientRequestId":"x-menu"}""");
+        Assert.Equal(409, res.Status);
+        var err = Json.Deserialize<ErrorResponse>(res.Body);
+        Assert.Equal(ErrorCodes.IllegalPhase, err!.Error);
+        Assert.Equal("menu", err.Phase);
+        Assert.Equal(0, env.Backend.CancelActiveChoiceCalls);
+        Assert.True(env.Backend.Get(5).IsWaitingForChoice);
+    }
+
+    [Fact]
+    public async Task Cancel_choice_without_pending_is_not_found()
+    {
+        await using var env = Env();
+        env.Backend.Add(new MemorySlot { InstanceId = 4, BuildingName = "House", CanBeUpgraded = true });
+
+        var res = await env.Post("/slots/choice/cancel", """{"clientRequestId":"x-none"}""");
+        Assert.Equal(409, res.Status);
+        var err = Json.Deserialize<ErrorResponse>(res.Body);
+        Assert.Equal(ErrorCodes.NotFound, err!.Error);
+        Assert.Contains("no upgrade choice to cancel", err.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.False(Json.Deserialize<CancelChoiceResponse>(res.Body)!.Canceled);
+        Assert.Equal(0, env.Backend.CancelActiveChoiceCalls);
+        Assert.False(env.Backend.ChoiceBusy);
+    }
+
+    [Fact]
+    public async Task Cancel_choice_dry_run_does_not_call_backend()
+    {
+        await using var env = Env();
+        env.Backend.Balance = 10;
+        env.Backend.Add(ChoiceSlot(5, delay: 0));
+        await env.Post("/slots/5/build", """{"clientRequestId":"b-then-dry"}""");
+        Assert.True(env.Backend.ChoiceBusy);
+
+        var res = await env.Post("/slots/choice/cancel?dryRun=true", """{"clientRequestId":"x-dry"}""");
+        Assert.Equal(200, res.Status);
+        var body = Json.Deserialize<DryRunResponse>(res.Body);
+        Assert.True(body!.DryRun);
+        Assert.Equal("cancel", body.Would.Action);
+        Assert.False(body.Would.Blocked);
+        Assert.Equal(0, env.Backend.CancelActiveChoiceCalls);
+        Assert.True(env.Backend.ChoiceBusy);
+        Assert.True(env.Backend.Get(5).IsWaitingForChoice);
+    }
+
+    [Fact]
     public async Task Choice_waits_up_to_four_frames()
     {
         await using var env = Env();
