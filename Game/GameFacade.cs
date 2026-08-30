@@ -9,7 +9,9 @@ public interface IGameWorld
     bool IsFreeToCallNight { get; }
     int Balance { get; }
     bool SwitchToNightSupported { get; }
+    bool SpendCoinsSupported { get; }
     void SwitchToNight();
+    void SpendCoins(int amount);
 }
 
 public sealed class GameFacade
@@ -54,6 +56,8 @@ public sealed class LiveGameWorld : IGameWorld
 
     public bool SwitchToNightSupported => ReflectionCache.DayNightCycleSwitchToNight != null;
 
+    public bool SpendCoinsSupported => ReflectionCache.PlayerInteractionSpendCoins != null;
+
     public void SwitchToNight()
     {
         var cycle = ReflectionCache.GetDayNightCycle();
@@ -61,6 +65,16 @@ public sealed class LiveGameWorld : IGameWorld
             throw new InvalidOperationException("DayNightCycle.SwitchToNight is unavailable");
         // Only SwitchToNight. Never EnemySpawner.DebugSkipWave / NightCall fill.
         ReflectionCache.Invoke(ReflectionCache.DayNightCycleSwitchToNight, cycle);
+    }
+
+    public void SpendCoins(int amount)
+    {
+        if (amount == 0)
+            return;
+        var pi = ReflectionCache.GetPlayerInteraction();
+        if (pi == null || ReflectionCache.PlayerInteractionSpendCoins == null)
+            throw new InvalidOperationException("PlayerInteraction.SpendCoins is unavailable");
+        ReflectionCache.Invoke(ReflectionCache.PlayerInteractionSpendCoins, pi, amount);
     }
 
     static string DetectPhase()

@@ -20,6 +20,7 @@ public static class ReflectionCache
     public static FieldInfo? PlayerInteractionInstance { get; private set; }
     public static PropertyInfo? PlayerInteractionIsFreeToCallNight { get; private set; }
     public static PropertyInfo? PlayerInteractionBalance { get; private set; }
+    public static MethodInfo? PlayerInteractionSpendCoins { get; private set; }
 
     public static Type? SceneTransitionManagerType { get; private set; }
     public static FieldInfo? SceneTransitionManagerInstance { get; private set; }
@@ -30,10 +31,12 @@ public static class ReflectionCache
     public static Type? CutOpenPathInteractorType { get; private set; }
     public static MethodInfo? ToggleCutPath { get; private set; }
     public static MethodInfo? IsToggleValidToUse { get; private set; }
+    public static MethodInfo? ToggleComplete { get; private set; }
     public static FieldInfo? PathOpened { get; private set; }
     public static FieldInfo? ToggleCost { get; private set; }
     public static FieldInfo? ToogleOnlyAtDay { get; private set; }
     public static FieldInfo? ToggleOnlyAtNight { get; private set; }
+    public static FieldInfo? PathStateChanged { get; private set; }
     public static PropertyInfo? CanBeInteractedWith { get; private set; }
 
     public static Type? UnityObjectType { get; private set; }
@@ -54,6 +57,7 @@ public static class ReflectionCache
         PlayerInteractionInstance = GetField(PlayerInteractionType, "instance", StaticAny);
         PlayerInteractionIsFreeToCallNight = GetProperty(PlayerInteractionType, "IsFreeToCallNight", InstanceAny);
         PlayerInteractionBalance = GetProperty(PlayerInteractionType, "Balance", InstanceAny);
+        PlayerInteractionSpendCoins = GetMethod(PlayerInteractionType, "SpendCoins", InstanceAny, typeof(int));
 
         SceneTransitionManagerType = FindType("SceneTransitionManager");
         SceneTransitionManagerInstance = GetField(SceneTransitionManagerType, "instance", StaticAny);
@@ -64,10 +68,12 @@ public static class ReflectionCache
         CutOpenPathInteractorType = FindType("CutOpenPathInteractor");
         ToggleCutPath = GetMethod(CutOpenPathInteractorType, "ToggleCutPath", InstanceAny);
         IsToggleValidToUse = GetMethod(CutOpenPathInteractorType, "IsToggleValidToUse", InstanceAny);
+        ToggleComplete = GetMethod(CutOpenPathInteractorType, "ToggleComplete", InstanceAny);
         PathOpened = GetField(CutOpenPathInteractorType, "pathOpened", InstanceAny);
         ToggleCost = GetField(CutOpenPathInteractorType, "toggleCost", InstanceAny);
         ToogleOnlyAtDay = GetField(CutOpenPathInteractorType, "toogleOnlyAtDay", InstanceAny);
         ToggleOnlyAtNight = GetField(CutOpenPathInteractorType, "toggleOnlyAtNight", InstanceAny);
+        PathStateChanged = GetField(CutOpenPathInteractorType, "pathStateChanged", InstanceAny);
         CanBeInteractedWith = GetProperty(CutOpenPathInteractorType, "CanBeInteractedWith", InstanceAny);
 
         UnityObjectType = FindType("UnityEngine.Object")
@@ -231,9 +237,35 @@ public static class ReflectionCache
         }
     }
 
-    public static void Invoke(MethodInfo? method, object target)
+    public static void Invoke(MethodInfo? method, object target, params object[] args)
     {
-        method?.Invoke(target, null);
+        method?.Invoke(target, args == null || args.Length == 0 ? null : args);
+    }
+
+    public static void InvokeBoolCallback(object? callback, bool value)
+    {
+        if (callback == null)
+            return;
+        foreach (var method in callback.GetType().GetMethods(InstanceAny))
+        {
+            if (method.Name != "Invoke")
+                continue;
+            var ps = method.GetParameters();
+            if (ps.Length == 1)
+            {
+                object arg = value;
+                if (ps[0].ParameterType != typeof(bool))
+                    arg = Convert.ChangeType(value, ps[0].ParameterType);
+                method.Invoke(callback, new[] { arg });
+                return;
+            }
+
+            if (ps.Length == 0)
+            {
+                method.Invoke(callback, null);
+                return;
+            }
+        }
     }
 
     static int ToInt(object? value, int fallback)
@@ -312,9 +344,10 @@ public static class ReflectionCache
         return field;
     }
 
-    static MethodInfo? GetMethod(Type? type, string name, BindingFlags flags)
+    static MethodInfo? GetMethod(Type? type, string name, BindingFlags flags, params Type[] parameters)
     {
-        var method = type?.GetMethod(name, flags, binder: null, types: Type.EmptyTypes, modifiers: null)
+        var types = parameters ?? Type.EmptyTypes;
+        var method = type?.GetMethod(name, flags, binder: null, types: types, modifiers: null)
             ?? type?.GetMethod(name, flags);
         if (type != null && method == null)
             Warn($"{type.Name}.{name} method missing");

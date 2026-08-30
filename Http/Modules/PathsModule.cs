@@ -18,9 +18,9 @@ public sealed class PathsModule : IRouteModule
         {
             req = Parse(ctx);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (MutateHttp.IsJsonParseError(ex))
         {
-            return Json.Error(500, ErrorCodes.UnityException, ex.Message);
+            return MutateHttp.InvalidJson(ex);
         }
 
         var dryRun = ctx.DryRun || req.DryRun;

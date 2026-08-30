@@ -14,7 +14,11 @@ public interface IPathCutter
     bool CanBeInteractedWith { get; }
     bool IsToggleValidToUse { get; }
     bool ToggleSupported { get; }
+    bool HasBoundPathStateChanged { get; }
+    bool HasToggleComplete { get; }
     void ToggleCutPath();
+    void InvokePathStateChanged();
+    void ToggleComplete();
 }
 
 public sealed class TogglePathResult
@@ -163,12 +167,25 @@ public static class Paths
             return Fail(
                 409,
                 ErrorCodes.IllegalPhase,
-                "IsToggleValidToUse is false",
+                "cutter toggle is not valid to use (IsToggleValidToUse=false)",
                 phase,
                 generation);
         }
 
-        cutter.ToggleCutPath();
+        if (cost > 0 && !world.SpendCoinsSupported)
+        {
+            return Fail(
+                501,
+                ErrorCodes.UnsupportedInThisBuild,
+                "PlayerInteraction.SpendCoins is unavailable",
+                phase,
+                generation);
+        }
+
+        if (cost > 0)
+            world.SpendCoins(cost);
+
+        ApplyToggle(cutter);
         return new TogglePathResult
         {
             Status = 200,
@@ -178,6 +195,26 @@ public static class Paths
             ToggleCost = cost,
             Id = entity
         };
+    }
+
+    static void ApplyToggle(IPathCutter cutter)
+    {
+        // ToggleComplete itself calls ToggleCutPath; only use it when the
+        // pathStateChanged callback is unbound so we do not flip twice.
+        if (cutter.HasBoundPathStateChanged)
+        {
+            cutter.ToggleCutPath();
+            cutter.InvokePathStateChanged();
+            return;
+        }
+
+        if (cutter.HasToggleComplete)
+        {
+            cutter.ToggleComplete();
+            return;
+        }
+
+        cutter.ToggleCutPath();
     }
 
     static bool TryResolve(GameFacade game, EntityId id, out IPathCutter? cutter, out string? error)
@@ -279,13 +316,55 @@ public static class Paths
             }
         }
 
-        public bool ToggleSupported => ReflectionCache.ToggleCutPath != null;
+        public bool ToggleSupported =>
+            ReflectionCache.ToggleCutPath != null || ReflectionCache.ToggleComplete != null;
+
+        public bool HasBoundPathStateChanged
+        {
+            get
+            {
+                if (ReflectionCache.PathStateChanged == null)
+                    return false;
+                try
+                {
+                    return ReflectionCache.PathStateChanged.GetValue(_target) != null;
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+        }
+
+        public bool HasToggleComplete => ReflectionCache.ToggleComplete != null;
 
         public void ToggleCutPath()
         {
             if (ReflectionCache.ToggleCutPath == null)
                 throw new InvalidOperationException("CutOpenPathInteractor.ToggleCutPath is unavailable");
             ReflectionCache.Invoke(ReflectionCache.ToggleCutPath, _target);
+        }
+
+        public void InvokePathStateChanged()
+        {
+            object? callback = null;
+            try
+            {
+                callback = ReflectionCache.PathStateChanged?.GetValue(_target);
+            }
+            catch
+            {
+                callback = null;
+            }
+
+            ReflectionCache.InvokeBoolCallback(callback, PathOpened);
+        }
+
+        public void ToggleComplete()
+        {
+            if (ReflectionCache.ToggleComplete == null)
+                throw new InvalidOperationException("CutOpenPathInteractor.ToggleComplete is unavailable");
+            ReflectionCache.Invoke(ReflectionCache.ToggleComplete, _target);
         }
     }
 }

@@ -105,6 +105,65 @@ public sealed class DayNightPathsTests
         Assert.True(body.PathOpened);
         Assert.Equal(8, body.ToggleCost);
         Assert.Equal(1, cutter.ToggleCalls);
+        Assert.Equal(1, cutter.PathStateChangedCalls);
+        Assert.Equal(0, cutter.ToggleCompleteCalls);
+        Assert.Equal(92, session.World.Balance);
+        Assert.Equal(1, session.World.SpendCalls);
+        Assert.Equal(8, session.World.SpentTotal);
+    }
+
+    [Fact]
+    public void Path_toggle_spends_toggle_cost()
+    {
+        using var session = Session.Day(free: true);
+        session.World.Balance = 40;
+        var cutter = session.AddCutter(77, toogleOnlyAtDay: true, cost: 8);
+        var res = session.Dispatch(
+            "POST",
+            "/path/toggle",
+            "{\"id\":{\"instanceId\":77,\"generation\":" + session.Ids.SceneGeneration + "}}");
+        Assert.Equal(200, res.Status);
+        Assert.Equal(1, cutter.ToggleCalls);
+        Assert.Equal(32, session.World.Balance);
+        Assert.Equal(1, session.World.SpendCalls);
+        Assert.Equal(8, session.World.SpentTotal);
+    }
+
+    [Fact]
+    public void Path_toggle_zero_cost_does_not_spend()
+    {
+        using var session = Session.Day(free: true);
+        session.World.Balance = 40;
+        var cutter = session.AddCutter(77, toogleOnlyAtDay: true, cost: 0);
+        var res = session.Dispatch(
+            "POST",
+            "/path/toggle",
+            "{\"id\":{\"instanceId\":77,\"generation\":" + session.Ids.SceneGeneration + "}}");
+        Assert.Equal(200, res.Status);
+        Assert.Equal(1, cutter.ToggleCalls);
+        Assert.Equal(40, session.World.Balance);
+        Assert.Equal(0, session.World.SpendCalls);
+        Assert.Equal(0, session.World.SpentTotal);
+    }
+
+    [Fact]
+    public void Path_toggle_uses_toggle_complete_when_event_unbound()
+    {
+        using var session = Session.Day(free: true);
+        session.World.Balance = 20;
+        var cutter = session.AddCutter(77, toogleOnlyAtDay: true, cost: 8);
+        cutter.HasBoundPathStateChanged = false;
+        cutter.HasToggleComplete = true;
+        var res = session.Dispatch(
+            "POST",
+            "/path/toggle",
+            "{\"id\":{\"instanceId\":77,\"generation\":" + session.Ids.SceneGeneration + "}}");
+        Assert.Equal(200, res.Status);
+        Assert.Equal(0, cutter.ToggleCalls);
+        Assert.Equal(1, cutter.ToggleCompleteCalls);
+        Assert.Equal(0, cutter.PathStateChangedCalls);
+        Assert.Equal(12, session.World.Balance);
+        Assert.Equal(8, session.World.SpentTotal);
     }
 
     [Fact]
@@ -123,6 +182,7 @@ public sealed class DayNightPathsTests
         Assert.Contains("toogleOnlyAtDay", err.Message);
         Assert.Equal(0, cutter.ToggleCalls);
         Assert.False(cutter.PathOpened);
+        Assert.Equal(0, session.World.SpendCalls);
     }
 
     [Fact]
@@ -137,6 +197,9 @@ public sealed class DayNightPathsTests
         Assert.Equal(200, res.Status);
         Assert.Equal(1, cutter.ToggleCalls);
         Assert.True(cutter.PathOpened);
+        Assert.Equal(95, session.World.Balance);
+        Assert.Equal(1, session.World.SpendCalls);
+        Assert.Equal(5, session.World.SpentTotal);
     }
 
     [Fact]
@@ -175,6 +238,7 @@ public sealed class DayNightPathsTests
         Assert.Equal(0, cutter.ToggleCalls);
         Assert.False(cutter.PathOpened);
         Assert.Equal(20, session.World.Balance);
+        Assert.Equal(0, session.World.SpendCalls);
     }
 
     [Fact]
@@ -207,6 +271,70 @@ public sealed class DayNightPathsTests
         var err = Json.Deserialize<ErrorResponse>(res.Body)!;
         Assert.Equal(ErrorCodes.InsufficientGold, err.Error);
         Assert.Equal(0, cutter.ToggleCalls);
+        Assert.Equal(3, session.World.Balance);
+        Assert.Equal(0, session.World.SpendCalls);
+    }
+
+    [Fact]
+    public void Path_toggle_invalid_use_has_clear_message()
+    {
+        using var session = Session.Day(free: true);
+        session.World.Balance = 50;
+        var cutter = session.AddCutter(77, toogleOnlyAtDay: true, cost: 8);
+        cutter.IsToggleValidToUse = false;
+        var res = session.Dispatch(
+            "POST",
+            "/path/toggle",
+            "{\"id\":{\"instanceId\":77,\"generation\":" + session.Ids.SceneGeneration + "}}");
+        Assert.Equal(409, res.Status);
+        var err = Json.Deserialize<ErrorResponse>(res.Body)!;
+        Assert.Equal(ErrorCodes.IllegalPhase, err.Error);
+        Assert.Contains("IsToggleValidToUse", err.Message);
+        Assert.DoesNotContain("illegal in phase", err.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, cutter.ToggleCalls);
+        Assert.Equal(0, session.World.SpendCalls);
+        Assert.Equal(50, session.World.Balance);
+    }
+
+    [Fact]
+    public void Invalid_json_is_400()
+    {
+        using var session = Session.Day(free: true);
+        var night = session.Dispatch("POST", "/night/call", "{not-json");
+        Assert.Equal(400, night.Status);
+        var nightErr = Json.Deserialize<ErrorResponse>(night.Body)!;
+        Assert.Equal("invalid_json", nightErr.Error);
+        Assert.NotEqual(ErrorCodes.UnityException, nightErr.Error);
+        Assert.Equal(0, session.World.SwitchToNightCalls);
+
+        var path = session.Dispatch("POST", "/path/toggle", "{also-bad");
+        Assert.Equal(400, path.Status);
+        var pathErr = Json.Deserialize<ErrorResponse>(path.Body)!;
+        Assert.Equal("invalid_json", pathErr.Error);
+        Assert.Equal(0, session.World.SpendCalls);
+    }
+
+    [Fact]
+    public void Timeout_does_not_read_phase_on_http_thread()
+    {
+        using var session = Session.Day(free: true);
+        session.World.PhaseAllowedThreadId = 0;
+        var mt = new MainThread(TimeSpan.FromMilliseconds(40));
+        var prev = MainThread.Current;
+        MainThread.Current = mt;
+        try
+        {
+            var res = session.Dispatch("POST", "/night/call", "{}");
+            Assert.Equal(504, res.Status);
+            var err = Json.Deserialize<ErrorResponse>(res.Body)!;
+            Assert.Equal(ErrorCodes.MainThreadTimeout, err.Error);
+            Assert.Null(err.Phase);
+            Assert.Equal(0, session.World.SwitchToNightCalls);
+        }
+        finally
+        {
+            MainThread.Current = prev;
+        }
     }
 
     [Fact]
@@ -307,19 +435,46 @@ public sealed class DayNightPathsTests
 
     sealed class FakeWorld : IGameWorld
     {
-        public string Phase { get; set; } = "day";
+        string _phase = "day";
+
+        public string Phase
+        {
+            get
+            {
+                if (PhaseAllowedThreadId is int allowed
+                    && Thread.CurrentThread.ManagedThreadId != allowed)
+                {
+                    throw new InvalidOperationException("World.Phase read off the main thread");
+                }
+
+                return _phase;
+            }
+            set => _phase = value;
+        }
+
+        public int? PhaseAllowedThreadId { get; set; }
         public bool SceneTransitionIsRunning { get; set; }
         public bool IsFreeToCallNight { get; set; } = true;
         public int Balance { get; set; } = 100;
         public bool SwitchToNightSupported { get; set; } = true;
+        public bool SpendCoinsSupported { get; set; } = true;
         public int SwitchToNightCalls { get; private set; }
         public int SkipWaveCalls { get; set; }
+        public int SpendCalls { get; private set; }
+        public int SpentTotal { get; private set; }
 
         public void SwitchToNight()
         {
             SwitchToNightCalls++;
-            Phase = "night";
+            _phase = "night";
             IsFreeToCallNight = false;
+        }
+
+        public void SpendCoins(int amount)
+        {
+            SpendCalls++;
+            SpentTotal += amount;
+            Balance -= amount;
         }
     }
 
@@ -334,11 +489,26 @@ public sealed class DayNightPathsTests
         public bool CanBeInteractedWith { get; set; } = true;
         public bool IsToggleValidToUse { get; set; } = true;
         public bool ToggleSupported { get; set; } = true;
+        public bool HasBoundPathStateChanged { get; set; } = true;
+        public bool HasToggleComplete { get; set; }
         public int ToggleCalls { get; private set; }
+        public int PathStateChangedCalls { get; private set; }
+        public int ToggleCompleteCalls { get; private set; }
 
         public void ToggleCutPath()
         {
             ToggleCalls++;
+            PathOpened = !PathOpened;
+        }
+
+        public void InvokePathStateChanged()
+        {
+            PathStateChangedCalls++;
+        }
+
+        public void ToggleComplete()
+        {
+            ToggleCompleteCalls++;
             PathOpened = !PathOpened;
         }
     }
