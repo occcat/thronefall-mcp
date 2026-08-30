@@ -124,6 +124,15 @@ public sealed class SlotDto
     public SlotUnlocksDto Unlocks { get; set; } = new();
     public List<ChoiceDto> Choices { get; set; } = new();
     public CombatDto Combat { get; set; } = new();
+    public string Tooltip { get; set; } = "";
+    public string NextUpgradeLabel { get; set; } = "";
+    public SlotUnlockPreviewDto UnlockPreview { get; set; } = new();
+}
+
+public sealed class SlotUnlockPreviewDto
+{
+    public List<string> BuildingNames { get; set; } = new();
+    public List<int> SlotIds { get; set; } = new();
 }
 
 public sealed class HpDto
