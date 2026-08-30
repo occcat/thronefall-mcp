@@ -176,6 +176,7 @@ public static class Observation
             // ignore
         }
 
+        ScoreClock.Fill(dto);
         return dto;
     }
 
