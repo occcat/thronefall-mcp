@@ -27,7 +27,8 @@ public sealed class McpClientTests
         "thronefall_path_toggle",
         "thronefall_king_teleport",
         "thronefall_loadout_select",
-        "thronefall_level_start"
+        "thronefall_level_start",
+        "thronefall_units_deploy"
     };
 
     [Fact]
@@ -113,6 +114,45 @@ public sealed class McpClientTests
         }));
         var missingUpgrade = Json.Deserialize<ErrorResponse>(ToolText(upgrade));
         Assert.Equal(ErrorCodes.UnsupportedInThisBuild, missingUpgrade!.Error);
+    }
+
+    [Fact]
+    public void Deploy_tool_posts_units_deploy()
+    {
+        using var scope = new UnitTestScope();
+        scope.World.AddUnit(1, "P Knight");
+        scope.World.AddUnit(2, "P Knight");
+        using var restore = ConfigRestore.Capture();
+        PluginConfig.AuthToken = "";
+        PluginConfig.BindAddress = "127.0.0.1";
+        using var server = new Server();
+        Assert.True(ServerTests.TryStartOnFreePort(server));
+
+        using var mcp = McpSession.Start($"http://127.0.0.1:{PluginConfig.HttpPort}");
+        mcp.Rpc(RpcRequest(1, "initialize", new Dictionary<string, object?>
+        {
+            ["protocolVersion"] = "2024-11-05",
+            ["capabilities"] = new Dictionary<string, object?>(),
+            ["clientInfo"] = new Dictionary<string, object?> { ["name"] = "tests", ["version"] = "0" }
+        }));
+
+        var call = mcp.Rpc(ToolCall(2, "thronefall_units_deploy", new Dictionary<string, object?>
+        {
+            ["clientRequestId"] = "d-1",
+            ["picks"] = new object[]
+            {
+                new Dictionary<string, object?> { ["typeName"] = "P Knight", ["count"] = 2 }
+            },
+            ["target"] = new Dictionary<string, object?> { ["x"] = -24, ["y"] = 3, ["z"] = -43 },
+            ["hold"] = true,
+            ["spacing"] = 2
+        }));
+        var body = Json.Deserialize<UnitsCommandResponse>(ToolText(call));
+        Assert.NotNull(body);
+        Assert.True(body!.Ok);
+        Assert.Equal("warp", body.Path);
+        Assert.Equal(2, body.Applied.Count);
+        Assert.Equal(-43f, scope.World.Units[0].HomePosition.Z);
     }
 
     [Fact]
