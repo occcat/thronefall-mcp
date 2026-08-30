@@ -24,7 +24,7 @@ public sealed class RouterTests
     public void Unknown_route_is_not_found()
     {
         var router = Router.CreateDefault();
-        var res = router.Dispatch(RequestContext.Create("POST", "/harvest"));
+        var res = router.Dispatch(RequestContext.Create("POST", "/no-such-endpoint"));
         Assert.Equal(404, res.Status);
         var err = Json.Deserialize<ErrorResponse>(res.Body);
         Assert.NotNull(err);

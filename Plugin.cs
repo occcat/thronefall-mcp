@@ -14,6 +14,9 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         PluginConfig.Bind(Config);
         MainThread.Current ??= new MainThread();
+        ReflectionCache.TryInit(Logger);
+        IdempotencyCache.Current ??= new IdempotencyCache();
+        Slots.Backend ??= new LiveSlotBackend();
     }
 
     private void Update()

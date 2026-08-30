@@ -15,6 +15,10 @@
     <Compile Include="Config/**/*.cs" />
     <Compile Include="Game/MainThread.cs" />
     <Compile Include="Game/IdRegistry.cs" />
+    <Compile Include="Game/Idempotency.cs" />
+    <Compile Include="Game/Slots.cs" />
+    <Compile Include="Game/ReflectionCache.cs" />
+    <Compile Include="Game/LiveSlotBackend.cs" />
   </ItemGroup>
 
   <ItemGroup>
