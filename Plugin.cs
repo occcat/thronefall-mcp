@@ -1,6 +1,7 @@
 using BepInEx;
 using ThronefallControl.Config;
 using ThronefallControl.Game;
+using ThronefallControl.Http;
 
 namespace ThronefallControl;
 
@@ -14,6 +15,12 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         PluginConfig.Bind(Config);
         MainThread.Current ??= new MainThread();
+        RuntimeState.Reset();
+        King.Reset();
+        Loadout.Reset();
+        King.Actions = King.ReflectionActions.Instance;
+        Loadout.Runtime = Loadout.ReflectionRuntime.Instance;
+        King.CurrentPolicy = PluginConfig.DefaultNightPolicy;
     }
 
     private void Update()
