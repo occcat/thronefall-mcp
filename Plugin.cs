@@ -1,6 +1,7 @@
 using System;
 using BepInEx;
 using ThronefallControl.Config;
+using ThronefallControl.Dto;
 using ThronefallControl.Game;
 using ThronefallControl.Http;
 using ThronefallControl.Http.Modules;
@@ -23,8 +24,18 @@ public sealed class Plugin : BaseUnityPlugin
         {
             PluginConfig.Bind(Config);
             ReflectionCache.TryInit(Logger);
+            RuntimeState.Reset();
+            King.Reset();
+            Loadout.Reset();
+            King.Actions = King.ReflectionActions.Instance;
+            Loadout.Runtime = Loadout.ReflectionRuntime.Instance;
+            King.CurrentPolicy = string.IsNullOrEmpty(PluginConfig.DefaultNightPolicy)
+                ? NightPolicies.Human
+                : PluginConfig.DefaultNightPolicy;
+
             var facade = GameFacade.Current ??= new GameFacade();
             Units.Current = facade.Units;
+            facade.NightPolicy = King.CurrentPolicy;
             _mainThread = MainThread.Current ?? new MainThread();
             MainThread.Current = _mainThread;
             HealthModule.FrameCountReader = ReadFrameCount;
@@ -48,7 +59,16 @@ public sealed class Plugin : BaseUnityPlugin
     {
         try
         {
-            GameFacade.Current?.Tick();
+            var facade = GameFacade.Current;
+            facade?.Tick();
+            RuntimeState.RefreshFromGame();
+            if (facade != null && facade.Phase != Phases.Boot)
+            {
+                RuntimeState.Phase = facade.Phase;
+                RuntimeState.Generation = facade.Ids.SceneGeneration;
+                RuntimeState.Transitioning = facade.Phase == Phases.Transition;
+            }
+
             _mainThread?.Pump();
         }
         catch (Exception ex)

@@ -20,7 +20,7 @@ public static class PluginConfig
     public static int MainThreadTimeoutMs { get; set; } = 500;
     public static int MaxWorkItemsPerFrame { get; set; } = 8;
 
-    public static string DefaultNightPolicy { get; set; } = "human";
+    public static string DefaultNightPolicy { get; set; } = ThronefallControl.Dto.NightPolicies.Human;
     public static bool TeleportKingNearbyOnSlotAction { get; set; }
 
     public static void Bind(object? config = null)
