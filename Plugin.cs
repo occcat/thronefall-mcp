@@ -13,11 +13,14 @@ public sealed class Plugin : BaseUnityPlugin
     {
         Instance = this;
         PluginConfig.Bind(Config);
+        ReflectionCache.TryInit(Logger);
+        GameFacade.Current ??= new GameFacade();
         MainThread.Current ??= new MainThread();
     }
 
     private void Update()
     {
+        GameFacade.Current?.Tick();
         MainThread.Current?.Pump();
     }
 
