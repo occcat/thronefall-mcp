@@ -48,40 +48,5 @@ public sealed class StateModule : IRouteModule
         });
     }
 
-    static HttpResponse OnMain(Func<HttpResponse> work)
-    {
-        var mt = MainThread.Current;
-        if (mt == null)
-            return Invoke(work);
-
-        try
-        {
-            var task = mt.Run(work);
-            return task.GetAwaiter().GetResult();
-        }
-        catch (MainThreadTimeoutException)
-        {
-            return Json.Error(504, ErrorCodes.MainThreadTimeout, "main thread timeout");
-        }
-        catch (AggregateException ae) when (ae.InnerException is MainThreadTimeoutException)
-        {
-            return Json.Error(504, ErrorCodes.MainThreadTimeout, "main thread timeout");
-        }
-        catch (Exception ex)
-        {
-            return Json.Error(500, ErrorCodes.UnityException, ex.Message);
-        }
-    }
-
-    static HttpResponse Invoke(Func<HttpResponse> work)
-    {
-        try
-        {
-            return work();
-        }
-        catch (Exception ex)
-        {
-            return Json.Error(500, ErrorCodes.UnityException, ex.Message);
-        }
-    }
+    static HttpResponse OnMain(Func<HttpResponse> work) => MutateHttp.OnMainThread(work);
 }

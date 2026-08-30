@@ -139,17 +139,9 @@ public sealed class SlotsModule : IRouteModule
         {
             response = work();
         }
-        catch (AggregateException ex) when (ex.InnerException is MainThreadTimeoutException)
-        {
-            response = Json.Error(504, ErrorCodes.MainThreadTimeout, "main thread timed out");
-        }
-        catch (MainThreadTimeoutException)
-        {
-            response = Json.Error(504, ErrorCodes.MainThreadTimeout, "main thread timed out");
-        }
         catch (Exception ex)
         {
-            response = Json.Error(500, ErrorCodes.UnityException, ex.GetBaseException().Message);
+            response = MutateHttp.FromCaught(ex);
         }
 
         _idempotency.Put(clientRequestId, response.Status, response.Body);

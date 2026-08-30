@@ -283,10 +283,8 @@ public sealed class DryRunWouldDto
     public bool Blocked { get; set; }
 }
 
-public sealed class CallNightRequest
+public sealed class CallNightRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
 }
 
 public sealed class CallNightResponse
@@ -297,10 +295,8 @@ public sealed class CallNightResponse
     public int Generation { get; set; }
 }
 
-public sealed class TogglePathRequest
+public sealed class TogglePathRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public EntityId? Id { get; set; }
 }
 

@@ -9,34 +9,26 @@ public sealed class UnitSelectorDto
     public int? Group { get; set; }
 }
 
-public sealed class UnitsCommandRequest
+public sealed class UnitsCommandRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public UnitSelectorDto? Selector { get; set; }
     public Vec3Dto? Target { get; set; }
     public bool Hold { get; set; } = true;
     public bool? UseSolver { get; set; }
 }
 
-public sealed class UnitsHoldRequest
+public sealed class UnitsHoldRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public UnitSelectorDto? Selector { get; set; }
 }
 
-public sealed class UnitsFollowRequest
+public sealed class UnitsFollowRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public UnitSelectorDto? Selector { get; set; }
 }
 
-public sealed class UnitsGroupRequest
+public sealed class UnitsGroupRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public UnitSelectorDto? Selector { get; set; }
     public int Group { get; set; }
     public bool Clear { get; set; }
@@ -49,20 +41,16 @@ public sealed class UnitPickDto
     public int Count { get; set; }
 }
 
-public sealed class UnitsDeployRequest
+public sealed class UnitsDeployRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public List<UnitPickDto>? Picks { get; set; }
     public Vec3Dto? Target { get; set; }
     public bool Hold { get; set; } = true;
     public float Spacing { get; set; } = 2f;
 }
 
-public sealed class UnitsSendToSpawnRequest
+public sealed class UnitsSendToSpawnRequest : MutateRequestBase
 {
-    public string? ClientRequestId { get; set; }
-    public bool DryRun { get; set; }
     public UnitSelectorDto? Selector { get; set; }
     public string? TypeName { get; set; }
     public int SpawnId { get; set; }
