@@ -32,6 +32,7 @@ public static class ReflectionCache
 
     public static Type? PathfindMovementPlayerunitType { get; private set; }
     public static PropertyInfo? HomePosition { get; private set; }
+    public static PropertyInfo? HasReachedHomePositionAlready { get; private set; }
     public static PropertyInfo? HoldPosition { get; private set; }
     public static PropertyInfo? FollowingPlayer { get; private set; }
     public static PropertyInfo? Flying { get; private set; }
@@ -243,6 +244,7 @@ public static class ReflectionCache
         OnUnitAdd = M(CommandUnitsType, "OnUnitAdd", 2);
 
         HomePosition = P(PathfindMovementPlayerunitType, "HomePosition");
+        HasReachedHomePositionAlready = P(PathfindMovementPlayerunitType, "HasReachedHomePositionAlready");
         HoldPosition = P(PathfindMovementPlayerunitType, "HoldPosition");
         FollowingPlayer = P(PathfindMovementPlayerunitType, "FollowingPlayer");
         Flying = P(PathfindMovementPlayerunitType, "Flying");

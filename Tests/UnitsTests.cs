@@ -9,6 +9,59 @@ namespace ThronefallControl.Tests;
 public sealed class UnitsTests
 {
     [Fact]
+    public void Deploy_picks_counts_by_type_and_warps()
+    {
+        using var scope = new UnitTestScope();
+        var k1 = scope.World.AddUnit(1, "P Knight");
+        var k2 = scope.World.AddUnit(2, "P Knight");
+        var k3 = scope.World.AddUnit(3, "P Knight");
+        var b1 = scope.World.AddUnit(11, "P Crossbows");
+        var b2 = scope.World.AddUnit(12, "P Crossbows");
+        var b3 = scope.World.AddUnit(13, "P Crossbows");
+        k3.Position = new WorldVec(99, 0, 99);
+        b3.Position = new WorldVec(88, 0, 88);
+
+        var outcome = scope.Service.Deploy(
+            new[]
+            {
+                new UnitPick { TypeName = "P Crossbows", Count = 2 },
+                new UnitPick { TypeName = "P Knight", Count = 2 }
+            },
+            new WorldVec(10f, 1f, -4f),
+            hold: true,
+            spacing: 2f,
+            dryRun: false);
+
+        Assert.True(outcome.Ok);
+        Assert.Equal("warp", outcome.Path);
+        Assert.Equal(4, outcome.Applied.Count);
+        Assert.DoesNotContain(3, outcome.Applied);
+        Assert.DoesNotContain(13, outcome.Applied);
+        Assert.Equal(99f, k3.Position.X);
+        Assert.Equal(88f, b3.Position.X);
+        Assert.True(k1.HoldPosition);
+        Assert.True(b1.Snapped);
+        Assert.InRange(k1.Position.X, 7f, 13f);
+        Assert.Equal(-4f, k1.HomePosition.Z);
+    }
+
+    [Fact]
+    public void Deploy_not_enough_units_is_not_found()
+    {
+        using var scope = new UnitTestScope();
+        scope.World.AddUnit(1, "P Knight");
+        var outcome = scope.Service.Deploy(
+            new[] { new UnitPick { TypeName = "P Knight", Count = 3 } },
+            new WorldVec(1, 0, 1),
+            hold: true,
+            spacing: 2f,
+            dryRun: false);
+        Assert.False(outcome.Ok);
+        Assert.Equal(404, outcome.Status);
+        Assert.Equal(ErrorCodes.NotFound, outcome.Error);
+    }
+
+    [Fact]
     public void Command_fallback_sets_home_and_hold()
     {
         using var scope = new UnitTestScope();

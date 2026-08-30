@@ -30,6 +30,13 @@ public sealed class FakeUnit : ICommandableUnit
 
     public void SnapToNavmesh() => Snapped = true;
 
+    public void WarpTo(WorldVec pos)
+    {
+        Position = pos;
+        HomePosition = pos;
+        Snapped = true;
+    }
+
     public WorldVec GetNearestGroundPosition(WorldVec pos) => pos;
 
     public void FollowPlayer(bool follow)

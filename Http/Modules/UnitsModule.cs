@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using ThronefallControl.Dto;
 using ThronefallControl.Game;
 
@@ -13,6 +14,7 @@ public sealed class UnitsModule : IRouteModule
         router.Map("POST", "/units/follow", ctx => Handle(ctx, Follow));
         router.Map("POST", "/units/groups", ctx => Handle(ctx, Groups));
         router.Map("POST", "/units/send-to-spawn", ctx => Handle(ctx, SendToSpawn));
+        router.Map("POST", "/units/deploy", ctx => Handle(ctx, Deploy));
     }
 
     static HttpResponse Handle(RequestContext ctx, Func<RequestContext, UnitCommandOutcome> work)
@@ -124,6 +126,37 @@ public sealed class UnitsModule : IRouteModule
             spawnGen,
             req.Hold,
             req.UseSolver,
+            ctx.DryRun || req.DryRun);
+    }
+
+    static UnitCommandOutcome Deploy(RequestContext ctx)
+    {
+        var units = RequireUnits();
+        if (units.Error != null)
+            return units.Error;
+
+        var req = Read<UnitsDeployRequest>(ctx);
+        if (req.Target == null)
+            return Bad(400, ErrorCodes.NotFound, "target is required");
+
+        var picks = new List<UnitPick>();
+        foreach (var dto in req.Picks ?? new List<UnitPickDto>())
+        {
+            var pick = new UnitPick
+            {
+                TypeName = dto.TypeName,
+                Count = dto.Count
+            };
+            if (dto.Ids != null)
+                pick.Ids.AddRange(dto.Ids);
+            picks.Add(pick);
+        }
+
+        return units.Value!.Deploy(
+            picks,
+            WorldVec.FromDto(req.Target),
+            req.Hold,
+            req.Spacing,
             ctx.DryRun || req.DryRun);
     }
 

@@ -42,6 +42,23 @@ public sealed class UnitsGroupRequest
     public bool Clear { get; set; }
 }
 
+public sealed class UnitPickDto
+{
+    public List<int>? Ids { get; set; }
+    public string? TypeName { get; set; }
+    public int Count { get; set; }
+}
+
+public sealed class UnitsDeployRequest
+{
+    public string? ClientRequestId { get; set; }
+    public bool DryRun { get; set; }
+    public List<UnitPickDto>? Picks { get; set; }
+    public Vec3Dto? Target { get; set; }
+    public bool Hold { get; set; } = true;
+    public float Spacing { get; set; } = 2f;
+}
+
 public sealed class UnitsSendToSpawnRequest
 {
     public string? ClientRequestId { get; set; }

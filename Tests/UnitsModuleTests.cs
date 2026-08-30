@@ -9,6 +9,32 @@ namespace ThronefallControl.Tests;
 public sealed class UnitsModuleTests
 {
     [Fact]
+    public void Deploy_route_warps_mixed_picks()
+    {
+        using var scope = new UnitTestScope();
+        scope.World.AddUnit(1, "P Knight");
+        scope.World.AddUnit(2, "P Knight");
+        scope.World.AddUnit(3, "P Knight");
+        scope.World.AddUnit(11, "P Crossbows");
+        scope.World.AddUnit(12, "P Crossbows");
+        scope.World.AddUnit(13, "P Crossbows");
+        var router = Router.CreateDefault();
+        var res = router.Dispatch(RequestContext.Create(
+            "POST",
+            "/units/deploy",
+            body: """{"picks":[{"typeName":"P Crossbows","count":3},{"typeName":"P Knight","count":3}],"target":{"x":-24,"y":3,"z":-43},"hold":true,"spacing":2}"""));
+
+        Assert.Equal(200, res.Status);
+        var body = Json.Deserialize<UnitsCommandResponse>(res.Body);
+        Assert.NotNull(body);
+        Assert.Equal("warp", body!.Path);
+        Assert.Equal(6, body.Applied.Count);
+        Assert.Equal(-43f, scope.World.Units[0].HomePosition.Z);
+        Assert.True(scope.World.Units[0].Snapped);
+        Assert.True(scope.World.Units[0].HoldPosition);
+    }
+
+    [Fact]
     public void Command_route_is_registered_and_holds()
     {
         using var scope = new UnitTestScope();

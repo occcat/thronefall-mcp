@@ -21,6 +21,7 @@ public interface ICommandableUnit
     void SnapToNavmesh();
     WorldVec GetNearestGroundPosition(WorldVec pos);
     void FollowPlayer(bool follow);
+    void WarpTo(WorldVec pos);
 }
 
 public interface ISpawnLine
@@ -53,6 +54,13 @@ public sealed class UnitSelector
     public List<int> Ids { get; } = new();
     public string? TypeName { get; set; }
     public int? Group { get; set; }
+}
+
+public sealed class UnitPick
+{
+    public List<int> Ids { get; } = new();
+    public string? TypeName { get; set; }
+    public int Count { get; set; }
 }
 
 public sealed class UnitCommandOutcome
@@ -203,11 +211,122 @@ public sealed class Units
         foreach (var u in units)
         {
             var snapped = u.GetNearestGroundPosition(target);
-            u.HomePosition = snapped;
-            u.SnapToNavmesh();
+            u.WarpTo(snapped);
             u.FollowPlayer(false);
             u.HoldPosition = hold;
         }
+    }
+
+    public UnitCommandOutcome Deploy(
+        IReadOnlyList<UnitPick> picks,
+        WorldVec target,
+        bool hold,
+        float spacing,
+        bool dryRun)
+    {
+        var gate = Gate("deploy");
+        if (gate != null)
+            return gate;
+        if (picks == null || picks.Count == 0)
+            return Fail(400, ErrorCodes.NotFound, "picks is required");
+
+        var chosen = PickUnits(picks);
+        if (chosen.Error != null)
+            return chosen.Error;
+
+        var units = chosen.Units;
+        var outcome = new UnitCommandOutcome
+        {
+            Ok = true,
+            Status = 200,
+            Action = "deploy",
+            DryRun = dryRun,
+            Path = "warp",
+            Target = target
+        };
+        foreach (var u in units)
+            outcome.Applied.Add(u.InstanceId);
+        if (dryRun)
+            return outcome;
+
+        var gap = spacing > 0.1f ? spacing : 2f;
+        for (var i = 0; i < units.Count; i++)
+        {
+            var slot = Offset(target, i, units.Count, gap);
+            var snapped = units[i].GetNearestGroundPosition(slot);
+            units[i].WarpTo(snapped);
+            units[i].FollowPlayer(false);
+            units[i].HoldPosition = hold;
+        }
+
+        return outcome;
+    }
+
+    static WorldVec Offset(WorldVec origin, int index, int total, float spacing)
+    {
+        if (total <= 1)
+            return origin;
+        var mid = (total - 1) / 2f;
+        return new WorldVec(origin.X + (index - mid) * spacing, origin.Y, origin.Z);
+    }
+
+    (List<ICommandableUnit> Units, UnitCommandOutcome? Error) PickUnits(IReadOnlyList<UnitPick> picks)
+    {
+        var taken = new HashSet<int>();
+        var chosen = new List<ICommandableUnit>();
+        foreach (var pick in picks)
+        {
+            if (pick.Ids.Count > 0)
+            {
+                foreach (var id in pick.Ids)
+                {
+                    if (!taken.Add(id))
+                        continue;
+                    var unit = World.ResolveUnit(id, World.Generation, out var error);
+                    if (error == ErrorCodes.StaleId)
+                        return (chosen, Fail(409, ErrorCodes.StaleId, $"stale unit id {id}"));
+                    if (unit == null)
+                        return (chosen, Fail(404, ErrorCodes.NotFound, $"unit {id} not found"));
+                    chosen.Add(unit);
+                }
+
+                continue;
+            }
+
+            if (string.IsNullOrEmpty(pick.TypeName))
+                return (chosen, Fail(400, ErrorCodes.NotFound, "each pick needs typeName or ids"));
+
+            var matches = new List<ICommandableUnit>();
+            foreach (var unit in World.PlayerUnits)
+            {
+                if (taken.Contains(unit.InstanceId))
+                    continue;
+                if (!TypeMatches(unit.TypeName, pick.TypeName))
+                    continue;
+                matches.Add(unit);
+            }
+
+            var need = pick.Count <= 0 ? matches.Count : pick.Count;
+            if (need <= 0)
+                return (chosen, Fail(400, ErrorCodes.NotFound, $"pick count for {pick.TypeName} must be > 0"));
+            if (matches.Count < need)
+            {
+                return (chosen, Fail(
+                    404,
+                    ErrorCodes.NotFound,
+                    $"need {need} {pick.TypeName} but only {matches.Count} idle"));
+            }
+
+            for (var i = 0; i < need; i++)
+            {
+                taken.Add(matches[i].InstanceId);
+                chosen.Add(matches[i]);
+            }
+        }
+
+        if (chosen.Count == 0)
+            return (chosen, Fail(404, ErrorCodes.NotFound, "no units matched picks"));
+        return (chosen, null);
     }
 
     UnitCommandOutcome Mutate(
@@ -219,7 +338,7 @@ public sealed class Units
         var gate = Gate(action);
         if (gate != null)
             return gate;
-        if (!World.CanCommandUnits && action is "command" or "hold" or "follow" or "send-to-spawn")
+        if (!World.CanCommandUnits && action is "command" or "hold" or "follow" or "send-to-spawn" or "deploy")
         {
             return Fail(501, ErrorCodes.UnsupportedInThisBuild, "unit command members missing in this build");
         }
@@ -826,6 +945,15 @@ public sealed class LiveUnitWorld : IUnitWorld
         public string TypeName => GameObjectName(_tagged ?? _movement);
 
         public WorldVec Position => TransformPosition(_movement);
+
+        public void WarpTo(WorldVec pos)
+        {
+            SetTransformPosition(_movement, pos);
+            HomePosition = pos;
+            if (ReflectionCache.HasReachedHomePositionAlready != null)
+                ReflectionCache.HasReachedHomePositionAlready.SetValue(_movement, true, null);
+            SnapToNavmesh();
+        }
 
         public WorldVec HomePosition
         {

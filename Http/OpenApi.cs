@@ -108,6 +108,7 @@ public static class OpenApi
             ["/units/follow"] = Post("FollowKing", "FollowPlayer. Legal in day/night."),
             ["/units/groups"] = Post("SetControlGroup", "Assign group 1/2/3. Legal in day/night."),
             ["/units/send-to-spawn"] = Post("SendToSpawn", "Type T onto spawn line L. Legal in day/night."),
+            ["/units/deploy"] = Post("DeployUnits", "Pick counts by type or ids and warp them to a world point. Legal in day/night."),
             ["/path/toggle"] = Post("TogglePath", "Toggle a path cutter."),
             ["/king/teleport"] = Post("TeleportKing", "Teleport to castle, start, or coordinates. Never MakeInvulerable. Legal in day/night/level_select."),
             ["/loadout/select"] = Post("SelectLoadout", "Pick a live TFUIEquippable by Data.displayName and kind. Legal in level_select."),
