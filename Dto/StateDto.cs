@@ -25,6 +25,9 @@ public sealed class StateDto
     public List<UnitDto>? Units { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+    public List<TrainingDto>? Training { get; set; }
+
+    [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
     public EnemySummaryDto? Enemies { get; set; }
 
     [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
@@ -66,6 +69,11 @@ public sealed class ClockDto
     public int Wavenumber { get; set; }
     public int WaveCount { get; set; }
     public bool SpawningInProgress { get; set; }
+    public bool FinalWaveComingUp { get; set; }
+    public bool PreFinalWaveComingUp { get; set; }
+    public bool WaveBeforeFinalWaveComingUp { get; set; }
+    public int CurrentScore { get; set; }
+    public int MaxScorePerNight { get; set; }
 }
 
 public sealed class KingDto

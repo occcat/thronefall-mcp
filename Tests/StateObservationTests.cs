@@ -77,6 +77,7 @@ public sealed class StateObservationTests
         Assert.Null(dto.Enemies);
         Assert.Null(dto.Loadout);
         Assert.Null(dto.Cutters);
+        Assert.Null(dto.Training);
         Assert.Equal(12, dto.Economy.Balance);
         Assert.Equal("Day", dto.Clock.Timestate);
     }
@@ -94,6 +95,7 @@ public sealed class StateObservationTests
         Assert.Null(dto.Spawns);
         Assert.Null(dto.Loadout);
         Assert.Null(dto.Cutters);
+        Assert.Null(dto.Training);
     }
 
     [Fact]
@@ -111,6 +113,7 @@ public sealed class StateObservationTests
         Assert.DoesNotContain("\"enemies\":", res.Body);
         Assert.DoesNotContain("\"loadout\":", res.Body);
         Assert.DoesNotContain("\"cutters\":", res.Body);
+        Assert.DoesNotContain("\"training\":", res.Body);
         Assert.DoesNotContain("bogus", res.Body);
         var dto = Json.Deserialize<StateDto>(res.Body);
         Assert.True(dto!.Ok);
@@ -157,6 +160,8 @@ public sealed class StateObservationTests
         Assert.Equal(200, router.Dispatch(RequestContext.Create("GET", "/state/slots")).Status);
         var units = router.Dispatch(RequestContext.Create("GET", "/state/units"));
         Assert.Equal(409, units.Status);
+        var training = router.Dispatch(RequestContext.Create("GET", "/state/training"));
+        Assert.Equal(409, training.Status);
         var err = Json.Deserialize<ErrorResponse>(units.Body);
         Assert.Equal(ErrorCodes.IllegalPhase, err!.Error);
         Assert.Equal(Phases.EndScreen, err.Phase);
@@ -181,6 +186,80 @@ public sealed class StateObservationTests
         Assert.NotNull(slice!.Loadout);
         Assert.Contains("Royal Mint", slice.Loadout!.AsString);
         Assert.Null(slice.Slots);
+    }
+
+    [Fact]
+    public void Clock_final_wave_and_score_appear_in_get_state()
+    {
+        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        Fill(world);
+        using var _ = Push(new GameFacade(world));
+        var router = Router.CreateDefault();
+        var res = router.Dispatch(RequestContext.Create("GET", "/state"));
+        Assert.Equal(200, res.Status);
+        Assert.Contains("\"finalWaveComingUp\":true", res.Body.Replace(" ", ""));
+        Assert.Contains("\"preFinalWaveComingUp\":true", res.Body.Replace(" ", ""));
+        Assert.Contains("\"waveBeforeFinalWaveComingUp\":false", res.Body.Replace(" ", ""));
+        Assert.Contains("\"currentScore\":120", res.Body.Replace(" ", ""));
+        Assert.Contains("\"maxScorePerNight\":200", res.Body.Replace(" ", ""));
+        var dto = Json.Deserialize<StateDto>(res.Body);
+        Assert.True(dto!.Clock.FinalWaveComingUp);
+        Assert.True(dto.Clock.PreFinalWaveComingUp);
+        Assert.False(dto.Clock.WaveBeforeFinalWaveComingUp);
+        Assert.Equal(120, dto.Clock.CurrentScore);
+        Assert.Equal(200, dto.Clock.MaxScorePerNight);
+        Assert.NotNull(dto.Training);
+        Assert.Single(dto.Training!);
+    }
+
+    [Fact]
+    public void Include_slots_omits_training_from_json()
+    {
+        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        Fill(world);
+        using var _ = Push(new GameFacade(world));
+        var router = Router.CreateDefault();
+        var res = router.Dispatch(RequestContext.Create("GET", "/state?include=slots"));
+        Assert.Equal(200, res.Status);
+        Assert.Contains("\"slots\":", res.Body);
+        Assert.DoesNotContain("\"training\":", res.Body);
+        var dto = Json.Deserialize<StateDto>(res.Body);
+        Assert.NotNull(dto!.Slots);
+        Assert.Null(dto.Training);
+    }
+
+    [Fact]
+    public void Training_include_and_slice_are_legal_in_day_illegal_in_menu()
+    {
+        var world = new FakeWorld { HintsValue = InGame("Nordfels") };
+        Fill(world);
+        using var _ = Push(new GameFacade(world));
+        var router = Router.CreateDefault();
+
+        var include = router.Dispatch(RequestContext.Create("GET", "/state?include=training"));
+        Assert.Equal(200, include.Status);
+        var includeDto = Json.Deserialize<StateDto>(include.Body);
+        Assert.NotNull(includeDto!.Training);
+        Assert.Single(includeDto.Training!);
+        Assert.Equal(4412, includeDto.Training![0].SlotId);
+        Assert.Equal("Barracks", includeDto.Training[0].BuildingName);
+        Assert.True(includeDto.Training[0].HasKnockedOut);
+        Assert.Equal(3.5f, includeDto.Training[0].TimeTillNextRespawn);
+        Assert.Null(includeDto.Slots);
+        Assert.Null(includeDto.Units);
+
+        var slice = router.Dispatch(RequestContext.Create("GET", "/state/training"));
+        Assert.Equal(200, slice.Status);
+        var sliceDto = Json.Deserialize<StateDto>(slice.Body);
+        Assert.NotNull(sliceDto!.Training);
+        Assert.Single(sliceDto.Training!);
+
+        world.HintsValue = Menu();
+        var menu = router.Dispatch(RequestContext.Create("GET", "/state/training"));
+        Assert.Equal(409, menu.Status);
+        var err = Json.Deserialize<ErrorResponse>(menu.Body);
+        Assert.Equal(ErrorCodes.IllegalPhase, err!.Error);
+        Assert.Equal(Phases.Menu, err.Phase);
     }
 
     [Fact]
@@ -216,7 +295,17 @@ public sealed class StateObservationTests
         world.Template = new StateDto
         {
             Economy = new EconomyDto { Balance = 12, TrueBalance = 12, IsFreeToCallNight = true },
-            Clock = new ClockDto { Timestate = "Day", Wavenumber = 1, WaveCount = 12 },
+            Clock = new ClockDto
+            {
+                Timestate = "Day",
+                Wavenumber = 1,
+                WaveCount = 12,
+                FinalWaveComingUp = true,
+                PreFinalWaveComingUp = true,
+                WaveBeforeFinalWaveComingUp = false,
+                CurrentScore = 120,
+                MaxScorePerNight = 200
+            },
             King = new KingDto { Hp = 105, MaxHp = 105, Alive = true },
             Settings = new SettingsDto { ResetUnitFormationEveryMorning = true, EnableControlGroups = true },
             Loadout = new LoadoutDto { AsString = { "Royal Mint" }, PerkPointsRemaining = 1 },
@@ -245,7 +334,17 @@ public sealed class StateObservationTests
             {
                 new() { Difficulty = "Normal", Polyline = { new Vec3Dto { X = 20 } } }
             },
-            Cutters = new List<CutterDto> { new() { ToggleCost = 8 } }
+            Cutters = new List<CutterDto> { new() { ToggleCost = 8 } },
+            Training = new List<TrainingDto>
+            {
+                new()
+                {
+                    SlotId = 4412,
+                    BuildingName = "Barracks",
+                    HasKnockedOut = true,
+                    TimeTillNextRespawn = 3.5f
+                }
+            }
         };
     }
 
@@ -290,6 +389,7 @@ public sealed class StateObservationTests
             dto.Enemies = Template.Enemies;
             dto.Spawns = Template.Spawns;
             dto.Cutters = Template.Cutters;
+            dto.Training = Template.Training;
             _ = include;
             _ = facade;
         }

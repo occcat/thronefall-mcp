@@ -44,6 +44,7 @@ public static class Phases
             case StateInclude.Slots:
                 return phase == Day || phase == Night || phase == EndScreen;
             case StateInclude.Units:
+            case StateInclude.Training:
             case StateInclude.Enemies:
             case StateInclude.Spawns:
                 return phase == Day || phase == Night;
