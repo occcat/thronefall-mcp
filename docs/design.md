@@ -430,11 +430,12 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | 方法 | 路径 | 合法 phase | 行为 |
 | --- | --- | --- | --- |
 | GET | `/health` | 任何（含 HTTP 线程可答的子集） | 见下。`alive` 不进主线程；`ready` 进主线程读 phase |
-| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,enemies,spawns,loadout` |
+| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,enemies,spawns,loadout,nextWave`（空 include=All，含 nextWave） |
 | GET | `/state/slots` | `day/night/end_screen` | 仅建筑 |
 | GET | `/state/units` | `day/night` | 玩家单位 |
 | GET | `/state/enemies` | `day/night` | 敌军摘要 |
-| GET | `/state/spawns` | `day/night` | spawn lines + wave info |
+| GET | `/state/spawns` | `day/night` | 地图全部 `EnemySpawnLine` + `suggestedRally`。**不是**今晚波次 |
+| GET | `/state/next-wave` | `day/night` | 今晚波次预览。`available=false` 表示读不到，不要编造出线 |
 | GET | `/state/loadout` | `menu/level_select/day/night` | 装备与 perk 点 |
 | GET | `/openapi.json` | 任何（HTTP 线程） | 静态 OpenAPI 3 文档 |
 | POST | `/harvest` | `day` | 收全部或一个 slot |
@@ -652,7 +653,13 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 
 来源：`EnemySpawnLine.difficulty`（private，类型 `ESpawnDifficulty { Normal, EasierForPlayerToDealWith, HarderForPlayerToDealWith }`）、public `canSpawnFlying` / `canSpawnSmallGround` / `canSpawnBigGround`、`get_SpawnLine`、`get_DifficultyBudgetMultiplyer`。`suggestedRally` 由插件计算，不是游戏字段。
 
-Wave 预览（白天决策用）：`EnemySpawner.GetWaveInfoForNextWave()` → `WaveInfo { waveNumber, outOfWaves, goldReward, enemies[], difficultyMulti }`，`WaveEnemyInfo` 含 `enemyName`、`enemyCount`、`maxHP`、`speed`、`range`、`attackDamage`、`attackCooldown`。
+**`/state/spawns` 是地图全部出线，不是今晚。** 今晚预览走 `GET /state/next-wave`（或 `GET /state?include=nextWave`）：
+
+- 只读 `EnemySpawner.GetNextWave()` → `Wave { warningText, spawns[], difficultyMulti }` 与 `GetWaveInfoForNextWave()` → `WaveInfo { waveNumber, outOfWaves, goldReward, enemies[], difficultyMulti }`。
+- `groups[]` 来自 `Wave.spawns`：`spawnLine` 用 `IdRegistry` 登记为 `kind=spawn`，`suggestedRally` 与 `/state/spawns` 同一套折线算法对齐；找不到 spawn 对象时 `available` 仍可为 true，该 group 的 id 用当时 `instanceId`。
+- `enemies[]` 来自 `WaveEnemyInfo`：`enemyName`、`enemyCount`、`eliteEnemy`、`maxHP`、`speed`、`range`、`attackDamage`、`attackCooldown`。
+- `GetNextWave` 返回 null 或抛错 → `available=false`，空 `groups` / `enemies`，不要编造出线。
+- **禁止**调用 `PlaceMarkersForNextWave`、`DebugSkipWave`、`StartSpawning`（HUD 副作用 / 作弊 / 开打）。
 
 #### Cutter DTO
 
