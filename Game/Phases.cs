@@ -46,6 +46,7 @@ public static class Phases
             case StateInclude.Units:
             case StateInclude.Enemies:
             case StateInclude.Spawns:
+            case StateInclude.NextWave:
                 return phase == Day || phase == Night;
             case StateInclude.Loadout:
                 return phase == Menu || phase == LevelSelect || phase == Day || phase == Night;

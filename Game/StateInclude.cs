@@ -9,6 +9,7 @@ public sealed class StateInclude
     public const string Units = "units";
     public const string Enemies = "enemies";
     public const string Spawns = "spawns";
+    public const string NextWave = "nextWave";
     public const string Loadout = "loadout";
     public const string Cutters = "cutters";
 
@@ -17,6 +18,7 @@ public sealed class StateInclude
     public bool WantUnits { get; private set; }
     public bool WantEnemies { get; private set; }
     public bool WantSpawns { get; private set; }
+    public bool WantNextWave { get; private set; }
     public bool WantLoadout { get; private set; }
     public bool WantCutters { get; private set; }
 
@@ -24,6 +26,7 @@ public sealed class StateInclude
     public bool WantsUnits => All || WantUnits;
     public bool WantsEnemies => All || WantEnemies;
     public bool WantsSpawns => All || WantSpawns;
+    public bool WantsNextWave => All || WantNextWave;
     public bool WantsLoadout => All || WantLoadout;
     public bool WantsCutters => All || WantCutters;
 
@@ -52,6 +55,9 @@ public sealed class StateInclude
                 case Spawns:
                     include.WantSpawns = true;
                     break;
+                case "nextwave":
+                    include.WantNextWave = true;
+                    break;
                 case Loadout:
                     include.WantLoadout = true;
                     break;
@@ -62,7 +68,8 @@ public sealed class StateInclude
         }
 
         if (!include.WantSlots && !include.WantUnits && !include.WantEnemies &&
-            !include.WantSpawns && !include.WantLoadout && !include.WantCutters)
+            !include.WantSpawns && !include.WantNextWave && !include.WantLoadout &&
+            !include.WantCutters)
         {
             // Unknown tokens only: still omit large arrays rather than dump everything.
             return include;
@@ -84,6 +91,9 @@ public sealed class StateInclude
 
         if (!WantsSpawns) dto.Spawns = null;
         else dto.Spawns ??= new();
+
+        if (!WantsNextWave) dto.NextWave = null;
+        else dto.NextWave ??= new NextWaveDto();
 
         if (!WantsLoadout) dto.Loadout = null;
         else dto.Loadout ??= new LoadoutDto();
