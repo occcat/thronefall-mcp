@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <Deterministic>true</Deterministic>
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin/$(MSBuildProjectName)/</BaseOutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+    <ThronefallRoot Condition="'$(ThronefallRoot)' == ''">$(HOME)/Library/Application Support/Steam/steamapps/common/Thronefall</ThronefallRoot>
+    <GameManaged Condition="'$(GameManaged)' == ''">$(ThronefallRoot)/thronefall.app/Contents/Resources/Data/Managed</GameManaged>
+    <BepInExCore Condition="'$(BepInExCore)' == ''">$(ThronefallRoot)/BepInEx/core</BepInExCore>
+  </PropertyGroup>
+</Project>

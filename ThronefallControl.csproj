@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>ThronefallControl</AssemblyName>
+    <RootNamespace>ThronefallControl</RootNamespace>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <NoWarn>$(NoWarn);CS1701;CS1702;CS1705</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Tests/**" />
+    <Compile Remove="Stubs/**" />
+    <None Remove="Tests/**" />
+    <EmbeddedResource Remove="Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup Condition="!Exists('$(BepInExCore)/BepInEx.dll')">
+    <Compile Include="Stubs/BepInEx.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(BepInExCore)/BepInEx.dll')">
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCore)/BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="!Exists('$(GameManaged)/UnityEngine.CoreModule.dll')">
+    <Compile Include="Stubs/UnityEngine.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="Exists('$(GameManaged)/UnityEngine.CoreModule.dll')">
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameManaged)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine" Condition="Exists('$(GameManaged)/UnityEngine.dll')">
+      <HintPath>$(GameManaged)/UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.SharedInternalsModule" Condition="Exists('$(GameManaged)/UnityEngine.SharedInternalsModule.dll')">
+      <HintPath>$(GameManaged)/UnityEngine.SharedInternalsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule" Condition="Exists('$(GameManaged)/UnityEngine.IMGUIModule.dll')">
+      <HintPath>$(GameManaged)/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp" Condition="Exists('$(GameManaged)/Assembly-CSharp.dll')">
+      <HintPath>$(GameManaged)/Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="Exists('$(GameManaged)/Newtonsoft.Json.dll')">
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(GameManaged)/Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="!Exists('$(GameManaged)/Newtonsoft.Json.dll')">
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
