@@ -430,9 +430,10 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | 方法 | 路径 | 合法 phase | 行为 |
 | --- | --- | --- | --- |
 | GET | `/health` | 任何（含 HTTP 线程可答的子集） | 见下。`alive` 不进主线程；`ready` 进主线程读 phase |
-| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,enemies,spawns,loadout` |
+| GET | `/state` | 任何 | 完整快照。query `?include=slots,units,training,enemies,spawns,loadout` |
 | GET | `/state/slots` | `day/night/end_screen` | 仅建筑 |
 | GET | `/state/units` | `day/night` | 玩家单位 |
+| GET | `/state/training` | `day/night` | 兵营训练 / 复活倒计时 |
 | GET | `/state/enemies` | `day/night` | 敌军摘要 |
 | GET | `/state/spawns` | `day/night` | spawn lines + wave info |
 | GET | `/state/loadout` | `menu/level_select/day/night` | 装备与 perk 点 |
@@ -510,7 +511,12 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
     "afterSunrise": true,
     "wavenumber": 11,
     "waveCount": 12,
-    "spawningInProgress": false
+    "spawningInProgress": false,
+    "finalWaveComingUp": false,
+    "preFinalWaveComingUp": false,
+    "waveBeforeFinalWaveComingUp": false,
+    "currentScore": 0,
+    "maxScorePerNight": 0
   },
   "king": {
     "id": { "instanceId": 123, "generation": 4, "kind": "king", "name": "Player Character" },
@@ -531,6 +537,7 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
   },
   "slots": [ { "...": "见下" } ],
   "units": [ { "...": "见下" } ],
+  "training": [ { "slotId": 4412, "buildingName": "Barracks", "hasKnockedOut": true, "timeTillNextRespawn": 3.5 } ],
   "enemies": { "count": 0, "units": [] },
   "spawns": [ { "...": "见下" } ],
   "cutters": [ { "...": "见下" } ],
@@ -552,6 +559,10 @@ Facade：`POST /slots/{id}/build` 若发现 `NextUpgradeIsChoice`，返回 `need
 | `king.hp` / `dead` | `PlayerMovement.Hp`（`Hp.HpValue` / `Alive`）、`PlayerMovement.Dead` |
 | `king.position` | `PlayerMovement.instance.transform.position` |
 | `wavenumber` | `EnemySpawner.instance.Wavenumber` / `WaveCount` / `SpawningInProgress` |
+| `finalWaveComingUp` / `waveBeforeFinalWaveComingUp` | `EnemySpawner.FinalWaveComingUp()` / `WaveBeforeFinalWaveComingUp()`（只读方法） |
+| `preFinalWaveComingUp` | `EnemySpawner.PreFinalWaveComingUp` |
+| `currentScore` / `maxScorePerNight` | `ScoreManager.Instance.CurrentScore` / `MaxScorePerNight`（读不到则为 0；**不**调用 `CalculateEndOfNightScore` / `AddDebugPoints`） |
+| `training[]` | `UnitRespawnerForBuildings`：`AtLeastOneUnitIsKnockedOut`、`timeTillNextRespawn`，经 `myBuildSlot` 对上 slot instanceId |
 | `level.*` | `LevelProgressManager.instance.GetLevelDataForActiveScene()` + `LevelInfo.sceneName` |
 | `loadout.asString` | `MatchSave.currentLoadoutAsString`（经 `MatchSaveLoadHandler.CurrentSave`） |
 | `resetUnitFormationEveryMorning` | `SettingsManager.Instance.ResetUnitFormationEveryMorning` |

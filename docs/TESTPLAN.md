@@ -93,8 +93,8 @@ HTTP 模块测 mutate 时：注入可 `Pump` 的 `MainThread` 实例，不要碰
 | --- | --- | --- |
 | 存活 | `curl -s http://127.0.0.1:17891/health` | 200，`ok=true`，`plugin=ThronefallControl`，`cheatsEnabled=false`。进程刚起来、尚在菜单也可以。 |
 | 健康 ready | 同一 URL；实现若区分 alive/ready，ready 进主线程填 `phase` / `scene` / `generation` | 局内 `phase` 为 `menu` / `level_select` / `day` / `night` / `end_screen` / `transition` 之一。 |
-| 状态 | `curl -s 'http://127.0.0.1:17891/state'` | 200，含 `generation`、`phase`、`economy`、`clock`、`king`。 |
-| 裁剪 | `curl -s 'http://127.0.0.1:17891/state?include=slots,units,spawns'` | 未请求的大数组可空或缺省；主线程 < 50 ms（看日志）。 |
+| 状态 | `curl -s 'http://127.0.0.1:17891/state'` | 200，含 `generation`、`phase`、`economy`、`clock`、`king`。`clock` 含 `finalWaveComingUp` / `preFinalWaveComingUp` / `waveBeforeFinalWaveComingUp` / `currentScore` / `maxScorePerNight`（读不到则为 0）。默认 All 含 `training`。 |
+| 裁剪 | `curl -s 'http://127.0.0.1:17891/state?include=slots,units,spawns'` | 未请求的大数组可空或缺省（含 `training`）；主线程 < 50 ms（看日志）。 |
 | OpenAPI | `curl -s http://127.0.0.1:17891/openapi.json` | 200，OpenAPI 3 文档。 |
 | 幂等空闲 | 连续两次相同 `clientRequestId` 的 POST | 第二次重放第一次响应，不重复扣钱 / 不重复派遣。 |
 | 过渡期 | 切场景瞬间任意 POST | 409 `transition_in_progress`，带当前 `generation`。 |
@@ -106,6 +106,7 @@ HTTP 模块测 mutate 时：注入可 `Pump` 的 `MainThread` 实例，不要碰
 ```bash
 curl -s http://127.0.0.1:17891/state/slots
 curl -s http://127.0.0.1:17891/state/units
+curl -s http://127.0.0.1:17891/state/training
 curl -s http://127.0.0.1:17891/state/enemies
 curl -s http://127.0.0.1:17891/state/spawns
 curl -s http://127.0.0.1:17891/state/loadout
@@ -115,11 +116,22 @@ curl -s http://127.0.0.1:17891/state/loadout
 | --- | --- | --- |
 | `/state/slots` | day / night / end_screen | 每槽有 `id.instanceId`、`id.generation`、`buildingName`、`nextUpgradeOrBuildCost`、`position`。Nordfels 白天槽位数约几十。 |
 | `/state/units` | day / night | `typeName`、`homePosition`、`holdPosition`、`tags` 与 `tagIds` 同时存在。 |
+| `/state/training` | day / night | 每条有 `slotId`（`myBuildSlot` instanceId）、`buildingName`、`hasKnockedOut`、`timeTillNextRespawn`。菜单 409。`include=slots` 的 JSON 无 `training`。 |
 | `/state/enemies` | day / night | 白天 count 可为 0；夜间有波次时 count>0，无投射物字段。 |
 | `/state/spawns` | day / night | `polyline` 非空；`suggestedRally` 为插件计算。 |
 | `/state/loadout` | menu / level_select / day / night | `asString` 与当前 perk/武器一致。 |
 
-菜单里打 `/state/slots` 应 `illegal_phase` 或空观察（以设计：合法 phase 外拒绝为准）。
+菜单里打 `/state/slots` 或 `/state/training` 应 `illegal_phase`（以设计：合法 phase 外拒绝为准）。
+
+#### training / score
+
+| 检查 | 期望 |
+| --- | --- |
+| 默认 `GET /state` | `clock.currentScore` / `maxScorePerNight` 为整数（读不到为 0）；终局波三布尔存在；`training` 数组存在。 |
+| `GET /state?include=slots` | JSON 无 `training` 键。 |
+| `GET /state?include=training` 或 `GET /state/training` | day/night 200；menu 409 `illegal_phase`。 |
+| 兵营有击倒单位 | 对应 `slotId` 的 `hasKnockedOut=true`，`timeTillNextRespawn` 随时间下降。 |
+| 只读约束 | 不得调用 `ScoreManager.CalculateEndOfNightScore`、`AddDebugPoints`、`EnemySpawner.DebugSkipWave`。 |
 
 过期 ID：记下某个 `instanceId`，退出到选图再进关，用旧 `generation` POST，必须 409 `stale_id`，不得打到新对象。
 
