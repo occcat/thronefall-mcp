@@ -19,7 +19,9 @@ description: 代操 Thronefall。战略判断局面，战术走已发布 HTTP / 
 
 ## 今晚能不能活
 
-现有城堡、已派的兵、还在训练的人、已经盖好的塔/墙。**不要把国王算进去**（用户可能挂机）。无兵契约是唯一必须把国王算进守力的情况，那种局更要早堆塔墙。
+现有城堡、已派的兵、已经盖好的塔/墙。**不要把国王算进去**（用户可能挂机）。无兵契约是唯一必须把国王算进守力的情况，那种局更要早堆塔墙。
+
+- **兵营/箭塔买了当天就有人。** 一级选兵立刻 +4，再升一级再 +4，当天就能派。不要按「还在训练」把军事推后。`training` 只表示死人补员（精英兵补得慢），不是新建要等一夜。
 
 - **同时在场看 `interval` / `delay`，不看 `count`。** `mouths[].count` 是整晚配额。按总数去堆今晚战力会早爆兵、抽空收入，后期没钱。人少高伤（Commander / Elite 一类）打的是当前这一撮，不是配额全表。
 - **类型对不上等于盖不住。** 近战打不到飞、猎人打人类没加成，人头再多也要先换兵种或换岗，再谈加人数。
@@ -118,7 +120,7 @@ home 被吸飞了，另挑**同一条行为对应的路**，不要统一收回�
 ## 工作循环
 
 1. 收税，读今晚 `mouths[]`、钱、建筑、兵、训练、**当前 loadout 每条权能的 catalog 全文**、地图图鉴里后面几晚的压力。权能没展开就先别决定买什么。看 `clock.finalWaveComingUp` / `waveNumber==waveCount`：终夜跳过所有收入建筑。
-2. 按战略决定买什么：城堡是失败条件，先看它的 `hp` / `level` / 下一档。终夜只买兵和防。L1 兵营/箭塔/英雄营用 choice 英文名选兵（`Knights`、`Fire Archers`、`Hunters`…）。`needsChoice` 立刻 `POST /slots/{id}/choice`，选错了 cancel，不要留下未选。无 choice 可并行。类型对不上就换兵种或换岗。
+2. 按战略决定买什么：城堡是失败条件，先看它的 `hp` / `level` / 下一档。终夜只买兵和防。L1 兵营/箭塔/英雄营用 choice 英文名选兵（`Knights`、`Fire Archers`、`Hunters`…）。`needsChoice` 立刻 `POST /slots/{id}/choice`，选错了 cancel，不要留下未选。无 choice 可并行。类型对不上就换兵种或换岗。买完或升完兵营/箭塔，当天这 4 人算进今夜力量，立刻一并派出去。
 3. **只在 `day` 派兵，按战术落点。** 多口、要点名：`include=units` 取 id，再 `thronefall_units_command`（`selector.ids` + `target` + `"hold": false`）。整类上一口：`thronefall_units_send_to_spawn`。按数量落点：`thronefall_units_deploy`（只用于单点；分口不要用 count）。分组用 `POST /units/groups`。`settings.resetUnitFormationEveryMorning` 为 true 时每个白天重派。
 4. 写两三句国王建议（见下）。**先查余额并循环花钱**（见战略），再 `thronefall_night_call`。不要问用户要不要召夜。白天即可召。开夜后不要再派兵，夜里不要改 Home。夜里看场用 `include=enemies,units`。口只认当天的 `mouths[]`。
 5. **夜结束后写 `.experience/`。** `phase` 回到 `day` 或变成 `end_screen` 时，把教训写到本 skill 目录的 `.experience/`（不要提交；已在仓库 `.gitignore`）。文件名用当地时间 `YYYY-MM-DD-HHMM.md`；同一把对局追加到该文件，换一把再开新文件。开局先扫该目录。只写以后换图还能用的判断：威胁类型、花钱对错、落点规则、接口坑。不要写对局流水账，不要把某张图的坐标写成下次默认岗。下一白天先扫一遍再决策。
